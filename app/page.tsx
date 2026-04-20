@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
-// 초성 검색 엔진 (고정)
+// 한글 초성 검색 엔진 (고정)
 const getChosung = (str: string) => {
   const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
   let result = "";
@@ -20,7 +20,7 @@ const getChosung = (str: string) => {
   return result;
 };
 
-// [로고] (고정)
+// [로고] public/logo.png 사용 (고정)
 const DeliveryScooterLogo = ({ className = "" }) => (
   <img src="/logo.png" alt="영종도 라이더 로고" className={`${className} object-contain`} />
 );
@@ -37,11 +37,10 @@ const AnRaMuBokSeal = ({ className = "" }) => (
 export default function Page() {
   const [data, setData] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('전체');
+  const [activeTab, setActiveTab] = useState('Home'); // 초기 상태 Home (리스트 숨김)
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminMode, setAdminMode] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [historyModal, setHistoryModal] = useState<{open: boolean, logs: any[]}>({open: false, logs: []});
   const [editingItem, setEditingItem] = useState<any>(null);
   const [stats, setStats] = useState({ visits: 0, logs: [] as any[] });
   const [formData, setFormData] = useState({ region: '운서', name: '', password: '', note: '' });
@@ -61,18 +60,16 @@ export default function Page() {
 
   useEffect(() => {
     fetchData();
-    fetch('https://api.ipify.org?format=json').then(res => res.json()).then(data => {
-      setIp(data.ip);
+    fetch('https://api.ipify.org?format=json').then(res => res.json()).then(resData => {
+      setIp(resData.ip);
       if (!sessionStorage.getItem('v')) {
-        supabase.from('site_visits').insert([{ ip: data.ip }]).then(() => sessionStorage.setItem('v', '1'));
+        supabase.from('site_visits').insert([{ ip: resData.ip }]).then(() => sessionStorage.setItem('v', '1'));
       }
     });
   }, []);
 
   const handleAdminAuth = () => {
     const pw = prompt('관리자 비밀번호를 입력하세요.');
-    
-    // 비밀번호 수정 반영: bb3145Fm!@
     if (pw === 'bb3145Fm!@') { 
       setIsAdmin(true);
       setAdminMode(true);
@@ -126,21 +123,24 @@ export default function Page() {
     fetchData();
   };
 
-  const isInitialState = searchTerm === '' && activeTab === '전체' && !adminMode;
+  // 핵심 UI 로직: Home 상태(첫 접속)이면서 검색어가 없을 때만 리스트를 비움
+  const isInitialState = activeTab === 'Home' && searchTerm === '';
   const filtered = isInitialState ? [] : data.filter(i => {
-    const regionMatch = activeTab === '전체' || i.region === activeTab;
+    const regionMatch = activeTab === '전체' || activeTab === 'Home' || i.region === activeTab;
     const lowerSearch = searchTerm.toLowerCase();
-    return regionMatch && (i.name.toLowerCase().includes(lowerSearch) || i.password.includes(searchTerm) || getChosung(i.name).includes(lowerSearch));
+    const chosung = getChosung(i.name);
+    return regionMatch && (i.name.toLowerCase().includes(lowerSearch) || i.password.includes(searchTerm) || chosung.includes(lowerSearch));
   });
 
   return (
     <div className="min-h-screen bg-[#070b14] text-white font-sans tracking-tight pb-40 relative overflow-x-hidden">
       <div className="fixed inset-0 bg-[url('https://images.unsplash.com/photo-1558981285-6f0c94958bb6?q=80&w=1000&auto=format')] bg-cover bg-center opacity-[0.04] grayscale pointer-events-none z-0"></div>
 
+      {/* 헤더: 압축 레이아웃 고정 */}
       <div className="bg-[#0f172a]/95 border-b border-slate-800/60 sticky top-0 z-40 backdrop-blur-lg shadow-2xl">
         <div className="p-3.5 flex items-center justify-between gap-2 relative z-10">
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <DeliveryScooterLogo className="w-10 h-10 shrink-0" />
+            <DeliveryScooterLogo className="w-10 h-10 shrink-0 drop-shadow-[0_0_8px_rgba(234,179,8,0.3)]" />
             <div className="flex items-baseline gap-1.5 min-w-0">
               <h1 className="text-base font-black text-white italic tracking-tighter shrink-0">영종도 <span className="text-yellow-400">배달 라이더</span></h1>
               <span className="text-slate-800 text-[10px] shrink-0">//</span>
@@ -152,15 +152,19 @@ export default function Page() {
           </button>
         </div>
 
+        {/* 검색창: 초성 안내 문구 절대 고정 */}
         {!adminMode && (
           <div className="px-5 pb-5 relative z-10">
-            <div className="relative group flex items-center">
-              <Search className="absolute left-4 text-slate-800 group-focus-within:text-yellow-500 transition-colors pointer-events-none z-20" size={18} />
+            <div className="relative group flex flex-col justify-center">
+              <Search className="absolute left-4 text-slate-800 group-focus-within:text-yellow-500 transition-colors z-20" size={18} />
               <input 
                 type="text" 
-                className="w-full p-4.5 pl-11 bg-[#1e293b] rounded-2xl border border-slate-700/50 focus:border-yellow-500/60 text-lg focus:outline-none shadow-xl transition-all font-bold" 
+                className="w-full p-4 pl-11 bg-[#1e293b] rounded-2xl border border-slate-700/50 focus:border-yellow-500/60 text-lg focus:outline-none shadow-xl transition-all font-bold" 
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)} 
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  if (activeTab === 'Home') setActiveTab('전체'); // 검색 시작 시 리스트 활성화
+                }} 
               />
               {!searchTerm && (
                 <span className="absolute left-11 text-[12px] text-slate-700 font-bold pointer-events-none opacity-50">건물명 초성 검색 가능 (예: ㄱㄹㄷㅂ)</span>
@@ -175,7 +179,7 @@ export default function Page() {
         )}
       </div>
 
-      {/* 메인 리스트 (비관리자용) */}
+      {/* 리스트 구역 */}
       {!adminMode && (
         <div className="p-5 space-y-4 relative z-10 min-h-[50px]">
           {filtered.map(i => (
@@ -186,49 +190,39 @@ export default function Page() {
                   <h2 className="text-xl font-bold mt-1 text-white tracking-tight break-keep">{i.name}</h2>
                 </div>
                 <div className="flex gap-1.5">
-                  <button onClick={() => {setEditingItem(i); setFormData({ region: i.region, name: i.name, password: i.password, note: i.note }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-700/20 active:scale-90"><Edit2 size={16} /></button>
-                  <button onClick={() => {navigator.clipboard.writeText(i.password); alert('복사됨');}} className="bg-yellow-500/10 p-3 rounded-xl text-yellow-500 border border-yellow-500/20 shadow-lg active:scale-90"><Copy size={18} /></button>
+                  <button onClick={() => {setEditingItem(i); setFormData({ region: i.region, name: i.name, password: i.password, note: i.note }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-700/20 active:scale-90 transition-transform"><Edit2 size={16} /></button>
+                  <button onClick={() => {navigator.clipboard.writeText(i.password); alert('복사됨');}} className="bg-yellow-500/10 p-3 rounded-xl text-yellow-500 border border-yellow-500/20 shadow-lg active:scale-90 transition-all"><Copy size={18} /></button>
                 </div>
               </div>
-              <div className="mt-4 pt-4 border-t border-slate-800/40 flex justify-between items-end gap-3 border-t border-slate-800/60">
+              <div className="mt-4 pt-4 border-t border-slate-800/40 flex justify-between items-end gap-3">
                 <span className="text-3xl font-mono font-black text-yellow-400 tracking-tighter drop-shadow-md">{i.password}</span>
                 <p className="text-[11px] text-slate-500 max-w-[50%] text-right font-medium leading-tight opacity-80 break-keep">{i.note || '-'}</p>
               </div>
             </div>
           ))}
+          {filtered.length === 0 && searchTerm && (
+            <div className="text-center py-20 text-slate-600 font-bold italic">검색 결과가 없습니다.</div>
+          )}
         </div>
       )}
 
-      {/* 관리자 대시보드 */}
+      {/* 관리자 모드 */}
       {adminMode && (
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-black text-yellow-400 flex items-center gap-2 uppercase tracking-tighter"><ShieldCheck /> Admin</h2>
             <button onClick={() => setAdminMode(false)} className="text-xs bg-slate-800 px-3 py-1.5 rounded-lg font-bold text-slate-400">Exit</button>
           </div>
-
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-4">
             <h3 className="font-bold text-slate-300 flex items-center gap-2"><Download size={16}/> 엑셀(CSV) 관리</h3>
             <div className="flex gap-2">
-              <button onClick={exportToCSV} className="flex-1 bg-blue-600/20 text-blue-400 border border-blue-600/30 p-4 rounded-2xl font-black flex flex-col items-center gap-2 active:scale-95 transition-all">
-                <Download size={24} /> 다운로드
-              </button>
+              <button onClick={exportToCSV} className="flex-1 bg-blue-600/20 text-blue-400 border border-blue-600/30 p-4 rounded-2xl font-black flex flex-col items-center gap-2 active:scale-95 transition-all"><Download size={24} /> 다운로드</button>
               <label className="flex-1 bg-green-600/20 text-green-400 border border-green-600/30 p-4 rounded-2xl font-black flex flex-col items-center gap-2 active:scale-95 transition-all cursor-pointer text-center">
                 <Upload size={24} className="mx-auto" /> 업로드
                 <input type="file" className="hidden" accept=".csv" onChange={importCSV} />
               </label>
             </div>
           </div>
-
-          <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[3rem] border border-slate-800 shadow-2xl">
-            <h3 className="font-bold text-slate-300 flex items-center gap-2 mb-4"><CalendarIcon size={16}/> 접속 및 편집 통계</h3>
-            <div className="grid grid-cols-7 gap-1">
-              {Array.from({length: 31}).map((_, i) => (
-                <div key={i} className="aspect-square bg-slate-900/50 rounded-lg border border-slate-800 flex items-center justify-center text-[10px] hover:bg-yellow-500/10 transition-all">{i + 1}</div>
-              ))}
-            </div>
-          </div>
-
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[3rem] border border-slate-800 shadow-2xl space-y-4">
             <h3 className="font-bold text-slate-300 flex items-center gap-2"><History size={16}/> 장난방지 로그 & 롤백</h3>
             <div className="space-y-3 max-h-80 overflow-y-auto no-scrollbar">
@@ -251,20 +245,22 @@ export default function Page() {
         </div>
       )}
 
+      {/* 푸터: 검색 전일 때 웅장하게 노출 */}
       <footer className={`flex flex-col items-center text-center px-6 transition-all duration-700 relative z-10 ${isInitialState ? 'mt-24 opacity-100' : 'mt-10 opacity-30 scale-95'}`}>
         <div className="w-full max-w-sm bg-[#1e293b]/60 backdrop-blur-md p-8 rounded-[3.5rem] border border-slate-800 shadow-2xl flex flex-col items-center gap-5">
           <AnRaMuBokSeal className="w-16 h-16 shadow-2xl shadow-red-900/40" />
           <div className="space-y-2">
             <p className="text-[11px] text-yellow-500 font-black tracking-[0.2em] uppercase mb-1">STAY ALERT, RIDE SAFE</p>
-            <p className="text-[15px] text-white font-black leading-snug tracking-tight break-keep">오늘도 영종도의 모든 길 위에서<br /><span className="text-yellow-400 font-black">안라무복</span>하시길 기원합니다.</p>
+            <p className="text-[15px] text-white font-black leading-snug tracking-tight break-keep">오늘도 영종도의 모든 길 위에서<br /><span className="text-yellow-500 font-black">안라무복</span>하시길 기원합니다.</p>
           </div>
           <div className="w-12 h-px bg-slate-800 mx-auto opacity-50 my-1"></div>
-          <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group">
+          <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group transition-all">
             <p className="text-[12px] text-white font-bold tracking-tight">만든이 : <span className="text-yellow-400 font-black ml-1 uppercase">부업맨 HoJun</span></p>
           </div>
         </div>
       </footer>
 
+      {/* 모달 및 플로팅 버튼 */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-sm">
           <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl">
@@ -272,11 +268,11 @@ export default function Page() {
             <div className="space-y-5">
               <div className="grid grid-cols-3 gap-2">
                 {['운서', '하늘', '화장실'].map(r => (
-                  <button key={r} onClick={() => setFormData({...formData, region: r})} className={`py-3 rounded-2xl font-bold border transition-all ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg' : 'bg-slate-900/50 border-slate-800 text-slate-600 bg-slate-800/50'}`}>{r}</button>
+                  <button key={r} onClick={() => setFormData({...formData, region: r})} className={`py-3 rounded-2xl font-bold border transition-all ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg shadow-yellow-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600 bg-slate-800/50'}`}>{r}</button>
                 ))}
               </div>
               <input type="text" placeholder="건물 명칭" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold placeholder:text-slate-800 shadow-inner" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-              <input type="text" placeholder="현관 비밀번호" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-yellow-400 font-mono text-xl outline-none focus:border-yellow-500 shadow-inner placeholder:text-slate-800" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+              <input type="text" placeholder="현관 비밀번호" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-yellow-400 font-mono text-xl outline-none focus:border-yellow-500 placeholder:text-slate-800 shadow-inner" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
               <textarea placeholder="특이사항" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none h-24 placeholder:text-slate-800 shadow-inner" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
               <div className="flex gap-2.5 mt-4">
                 <button onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-800 p-5 rounded-2xl font-bold text-white border border-slate-700/50">Cancel</button>
