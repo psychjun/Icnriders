@@ -1,14 +1,14 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Search, Copy, Plus, Edit2, X, Save, MapPin, History, RotateCcw, BarChart3 } from 'lucide-react';
+import { Search, Copy, Plus, Edit2, X, Save, MapPin, History, RotateCcw, BarChart3, Navigation } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
-// 한글 초성 검색 엔진
+// 초성 검색 엔진
 const getChosung = (str: string) => {
   const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
   let result = "";
@@ -20,22 +20,27 @@ const getChosung = (str: string) => {
   return result;
 };
 
-// [로고 1] 더 직관적인 배달 스쿠터 아이콘 (뒤에 배달박스 실루엣 강조)
+// [수정] 보내주신 이미지(image_5.png) 기반으로 시안성을 극대화한 노란색 배달 스쿠터 SVG 아이콘
 const DeliveryScooterIcon = ({ className = "" }) => (
   <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-    <circle cx="18" cy="48" r="6" stroke="currentColor" strokeWidth="4"/>
-    <circle cx="50" cy="48" r="6" stroke="currentColor" strokeWidth="4"/>
-    <path d="M12 42L20 22H42L52 42H12Z" fill="currentColor" fillOpacity="0.2" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/>
-    {/* 배달통 시각화 */}
-    <rect x="6" y="12" width="24" height="18" rx="2" fill="#FBBF24" stroke="currentColor" strokeWidth="2.5"/>
-    <path d="M42 22L46 12H58" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+    {/* 헬멧을 쓴 라이더 실루엣 */}
+    <circle cx="28" cy="18" r="8" stroke="currentColor" strokeWidth="3" fill="currentColor" />
+    <path d="M28 26C20 26 14 32 14 40H42C42 32 36 26 28 26Z" stroke="currentColor" strokeWidth="3" fill="currentColor" />
+    {/* 스쿠터 바디 */}
+    <rect x="16" y="44" width="32" height="12" rx="3" stroke="currentColor" strokeWidth="3" fill="currentColor" />
+    <circle cx="22" cy="56" r="6" stroke="currentColor" strokeWidth="3" />
+    <circle cx="42" cy="56" r="6" stroke="currentColor" strokeWidth="3" />
+    {/* 뒤쪽 배달 박스 시각화 */}
+    <rect x="44" y="24" width="16" height="20" rx="3" fill="#FBBF24" stroke="currentColor" strokeWidth="2.5"/>
+    <path d="M44 32H60" stroke="currentColor" strokeWidth="1.5"/>
+    {/* 핸들바 및 연결부 */}
+    <path d="M38 28L42 44" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 
-// [로고 2] 안라무복 낙관(도장) 커스텀 SVG
+// [아이콘] 안라무복 낙관(도장) 커스텀 SVG
 const AnRaMuBokSeal = ({ className = "" }) => (
   <svg viewBox="0 0 100 100" className={className} xmlns="http://www.w3.org/2000/svg">
-    {/* 도장 테두리 느낌 */}
     <path d="M10,12 Q8,8 14,10 L86,8 Q92,8 90,14 L92,86 Q92,92 86,90 L14,92 Q8,92 10,86 Z" fill="#cc0000" />
     <text x="50" y="45" textAnchor="middle" fill="white" fontSize="28" fontWeight="900" style={{fontFamily: 'serif'}}>안라</text>
     <text x="50" y="82" textAnchor="middle" fill="white" fontSize="28" fontWeight="900" style={{fontFamily: 'serif'}}>무복</text>
@@ -45,7 +50,7 @@ const AnRaMuBokSeal = ({ className = "" }) => (
 export default function Page() {
   const [data, setData] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('Home'); // 초기 상태 Home
+  const [activeTab, setActiveTab] = useState('Home'); 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [historyModal, setHistoryModal] = useState<{open: boolean, logs: any[]}>({open: false, logs: []});
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -92,7 +97,7 @@ export default function Page() {
     fetchData();
   };
 
-  // UI 로직: Home 상태이면서 검색어가 없으면 리스트를 비움
+  // UI 로직: Home 상태이면서 검색어가 없으면 리스트를 비움 (푸터 노출)
   const isInitialState = activeTab === 'Home' && searchTerm === '';
   const filtered = isInitialState ? [] : data.filter(i => {
     const regionMatch = activeTab === '전체' || activeTab === 'Home' || i.region === activeTab;
@@ -111,7 +116,7 @@ export default function Page() {
       {/* 헤더 */}
       <div className="bg-[#0f172a]/95 border-b border-slate-800/60 sticky top-0 z-40 backdrop-blur-lg shadow-2xl">
         <div className="p-5 flex items-center gap-4 relative z-10">
-          {/* [수정] 업그레이드된 배달 스쿠터 아이콘, 크기 키움 */}
+          {/* [수정] 업그레이드된 노란색 배달 스쿠터 아이콘 적용, 크기 키움 */}
           <DeliveryScooterIcon className="w-16 h-16 text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.4)]" />
           <div className="flex-1">
             <h1 className="text-2xl font-black text-white italic tracking-tighter uppercase">Rider Portal</h1>
@@ -129,6 +134,7 @@ export default function Page() {
             <input 
               type="text" placeholder="건물명 초성 검색 가능 (예: ㄱㄹㄷㅂ)" 
               className="w-full p-4 pl-12 bg-[#1e293b] rounded-2xl border border-slate-700/50 focus:border-yellow-500/60 text-lg focus:outline-none placeholder:text-slate-800 shadow-xl transition-all font-bold" 
+              value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 if(activeTab === 'Home') setActiveTab('전체');
@@ -137,7 +143,7 @@ export default function Page() {
           </div>
           <div className="flex gap-2 mt-5 overflow-x-auto no-scrollbar pb-1">
             {['전체', '운서', '하늘', '화장실'].map(t => (
-              <button key={t} onClick={() => setActiveTab(t)} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-all text-xs ${activeTab === t ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'bg-slate-800/40 text-slate-500 border border-slate-700/30'}`}>
+              <button key={t} onClick={() => setActiveTab(t)} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-all text-xs ${activeTab === t ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'bg-slate-800/40 text-slate-600 border border-slate-700/30'}`}>
                 {t}
               </button>
             ))}
@@ -157,10 +163,10 @@ export default function Page() {
               <div className="flex gap-1.5">
                 <button onClick={() => showHistory(i.id)} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-blue-400 border border-slate-700/20 active:scale-90 transition-transform"><History size={16} /></button>
                 <button onClick={() => {setEditingItem(i); setFormData({ region: i.region, name: i.name, password: i.password, note: i.note }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-700/20 active:scale-90 transition-transform"><Edit2 size={16} /></button>
-                <button onClick={() => {navigator.clipboard.writeText(i.password); alert('비밀번호 복사 완료');}} className="bg-yellow-500/10 p-3 rounded-xl text-yellow-500 border border-yellow-500/20 shadow-lg active:scale-90 transition-all"><Copy size={18} /></button>
+                <button onClick={() => {navigator.clipboard.writeText(i.password); alert('비밀번호 복사 완료');}} className="bg-yellow-500/10 p-3 rounded-xl text-yellow-500 border border-yellow-500/20 shadow-lg hover:bg-yellow-500/20 active:scale-90 transition-all"><Copy size={18} /></button>
               </div>
             </div>
-            <div className="mt-4 pt-4 border-t border-slate-800/40 flex justify-between items-end border-t border-slate-800/60">
+            <div className="mt-4 pt-4 border-t border-slate-800/40 flex justify-between items-end border-t border-slate-800/60 flex justify-between items-end gap-3 border-t border-slate-800/60">
               <span className="text-3xl font-mono font-black text-yellow-400 tracking-tighter drop-shadow-md">{i.password}</span>
               <p className="text-[11px] text-slate-500 max-w-[50%] text-right font-medium leading-tight opacity-80 break-keep">{i.note || '-'}</p>
             </div>
@@ -171,23 +177,20 @@ export default function Page() {
         )}
       </div>
 
-      {/* 푸터: 검색 전/Home 상태일 때 상단 여백을 채우며 자연스럽게 노출 */}
+      {/* [핵심] 푸터: 검색 전일 때 상단 여백을 채우며 자연스럽게 노출 */}
       <footer className={`flex flex-col items-center text-center px-6 transition-all duration-700 relative z-10 ${isInitialState ? 'mt-24 opacity-100' : 'mt-10 opacity-30 scale-95'}`}>
         <div className="w-full max-w-sm bg-[#1e293b]/60 backdrop-blur-md p-8 rounded-[3rem] border border-slate-800 shadow-2xl flex flex-col items-center gap-5">
           <SealIcon className="w-16 h-16 shadow-2xl shadow-red-900/40" />
-          
           <div className="space-y-2">
-            <p className="text-[11px] text-yellow-500 font-black tracking-[0.2em] uppercase">STAY ALERT, RIDE SAFE</p>
+            <p className="text-[11px] text-yellow-500 font-black tracking-[0.2em] uppercase mb-1">STAY ALERT, RIDE SAFE</p>
             <p className="text-[15px] text-white font-black leading-snug tracking-tight break-keep">
               오늘도 영종도의 모든 길 위에서<br />
               <span className="text-yellow-500 font-black">안라무복</span>하시길 기원합니다.
             </p>
           </div>
-
           <div className="w-12 h-px bg-slate-800 mx-auto opacity-50 my-1"></div>
-
           {/* 만든이 가독성 확보 */}
-          <div className="bg-[#070b14] px-5 py-2 rounded-2xl border border-slate-800 shadow-inner group">
+          <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group">
             <p className="text-[12px] text-white font-bold tracking-tight">
               만든이 : <span className="text-yellow-400 font-black ml-1 uppercase group-hover:text-white transition-colors">부업맨 HoJun</span>
             </p>
@@ -205,10 +208,11 @@ export default function Page() {
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[200] flex items-center justify-center p-6 text-sm">
           <div className="bg-[#1e293b] w-full max-w-md rounded-[2.5rem] p-8 border border-slate-700/40 shadow-3xl">
             <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4 text-white font-black uppercase tracking-tighter">
-              <h3 className="flex items-center gap-2"><History size={18}/> History Logs</h3>
+              <h3 className="flex items-center gap-2 tracking-tighter"><History size={18}/> History Logs</h3>
               <button onClick={() => setHistoryModal({ ...historyModal, open: false })} className="bg-slate-800 p-2 rounded-xl text-white"><X size={18}/></button>
             </div>
             <div className="space-y-3 max-h-[50vh] overflow-y-auto no-scrollbar">
+              {historyModal.logs.length === 0 && <p className="text-center text-slate-600 py-10 italic">기록된 이력이 없습니다.</p>}
               {historyModal.logs.map((log, idx) => (
                 <div key={idx} className="bg-[#070b14] p-5 rounded-3xl border border-slate-800 flex justify-between items-center group shadow-inner">
                   <div className="flex-1">
@@ -216,7 +220,7 @@ export default function Page() {
                     <p className="text-yellow-500 font-mono font-bold text-xl">{log.old_password}</p>
                     <p className="text-[11px] text-slate-600 mt-1 font-medium">{log.old_name}</p>
                   </div>
-                  <button onClick={() => rollback(log)} className="bg-blue-500/10 text-blue-400 p-3.5 rounded-2xl active:scale-90 border border-blue-500/10"><RotateCcw size={18}/></button>
+                  <button onClick={() => rollback(log)} className="bg-blue-500/10 text-blue-400 p-3.5 rounded-2xl active:scale-90 transition-all border border-blue-500/10"><RotateCcw size={18}/></button>
                 </div>
               ))}
             </div>
@@ -226,21 +230,21 @@ export default function Page() {
 
       {/* 등록/수정 모달 */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6text-sm">
-          <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl text-sm">
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6text-sm p-6 text-sm">
+          <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl text-sm break-keep">
             <h3 className="text-2xl font-black text-yellow-400 mb-8 tracking-tighter uppercase break-keep">{editingItem ? 'Edit Info' : 'New Entry'}</h3>
-            <div className="space-y-5">
-              <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-5 text-sm">
+              <div className="grid grid-cols-3 gap-2 grid-cols-3 gap-2">
                 {['운서', '하늘', '화장실'].map(r => (
                   <button key={r} onClick={() => setFormData({...formData, region: r})} className={`py-3 rounded-2xl font-bold border transition-all text-sm ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg shadow-yellow-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600 bg-slate-800/50'}`}>{r}</button>
                 ))}
               </div>
-              <input type="text" placeholder="건물 명칭 (예: 글래드빌)" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold placeholder:text-slate-800 shadow-inner" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-              <input type="text" placeholder="현관 비밀번호 (예: #1234)" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-yellow-400 font-mono text-xl outline-none focus:border-yellow-500 shadow-inner placeholder:text-slate-800" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-              <textarea placeholder="특이사항 (경비 호출 방법 등)" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none h-28 h-24 placeholder:text-slate-800 shadow-inner" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
-              <div className="flex gap-2.5 mt-4">
+              <input type="text" placeholder="건물 명칭" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold placeholder:text-slate-800 shadow-inner break-keep" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+              <input type="text" placeholder="현관 비밀번호" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-yellow-400 font-mono text-xl outline-none focus:border-yellow-500 placeholder:text-slate-800 shadow-inner" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+              <textarea placeholder="특이사항" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none h-28 placeholder:text-slate-800 shadow-inner text-sm h-24" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
+              <div className="flex gap-2.5 mt-4 flex gap-2.5 mt-4">
                 <button onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-800 p-5 rounded-2xl font-bold active:scale-95 transition-all text-white border border-slate-700/50 hover:bg-slate-700">Cancel</button>
-                <button onClick={handleSave} className="flex-[2] bg-yellow-500 text-black p-5 rounded-2xl font-black text-xl shadow-xl shadow-yellow-500/10 active:scale-95 transition-all hover:bg-yellow-400">Submit</button>
+                <button onClick={handleSave} className="flex-[2] bg-yellow-500 text-black p-5 rounded-2xl font-black text-xl shadow-xl shadow-yellow-500/10 active:scale-95 transition-all hover:bg-yellow-400Submit">Submit</button>
               </div>
             </div>
           </div>
