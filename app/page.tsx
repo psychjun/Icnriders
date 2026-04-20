@@ -85,7 +85,7 @@ export default function Page() {
     const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.concat(rows).join("\n");
     const link = document.createElement("a");
     link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `라이더_데이터_${new Date().toLocaleDateString()}.csv`);
+    link.setAttribute("download", `AccessInfo_Backup_${new Date().toLocaleDateString()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -104,13 +104,13 @@ export default function Page() {
         }
       }
       fetchData();
-      alert('동기화 완료');
+      alert('데이터가 성공적으로 업데이트되었습니다.');
     };
     reader.readAsText(file);
   };
 
   const handleSave = async () => {
-    if (!formData.name || !formData.password) return alert('내용을 입력하세요.');
+    if (!formData.name || !formData.password) return alert('필수 항목을 입력하세요.');
     const logData = { building_id: editingItem?.id, old_name: editingItem?.name, old_password: editingItem?.password, old_note: editingItem?.note, ip };
     if (editingItem) {
       await supabase.from('building_logs').insert([logData]);
@@ -134,7 +134,7 @@ export default function Page() {
     filtered = [...filtered].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   }
 
-  // 캘린더 유틸
+  // 캘린더 헬퍼
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
@@ -142,7 +142,7 @@ export default function Page() {
     <div className="min-h-screen bg-[#070b14] text-white font-sans tracking-tight pb-40 relative overflow-x-hidden">
       <div className="fixed inset-0 bg-[url('https://images.unsplash.com/photo-1558981285-6f0c94958bb6?q=80&w=1000&auto=format')] bg-cover bg-center opacity-[0.04] grayscale pointer-events-none z-0"></div>
 
-      {/* [잠금] 헤더 레이아웃 및 문구 */}
+      {/* 헤더 섹션: 문구 수정 반영 */}
       <div className="bg-[#0f172a]/95 border-b border-slate-800/60 sticky top-0 z-40 backdrop-blur-lg shadow-2xl">
         <div className="p-3.5 flex items-center justify-between gap-2 relative z-10">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -152,8 +152,8 @@ export default function Page() {
                 영종도 <span className="text-yellow-400">배달 라이더</span>
               </h1>
               <span className="text-slate-800 text-[10px] shrink-0">//</span>
-              <span className="text-[9px] text-slate-500 font-bold tracking-tighter truncate font-mono">
-                공동현관 출입 정보망
+              <span className="text-[9px] text-slate-500 font-bold tracking-tighter truncate font-mono uppercase">
+                Access Point Info
               </span>
             </div>
           </div>
@@ -162,7 +162,7 @@ export default function Page() {
           </button>
         </div>
 
-        {/* [잠금] 검색창 및 투명 안내 문구 */}
+        {/* 검색 및 탭 영역 */}
         {!adminMode && (
           <div className="px-5 pb-5 relative z-10">
             <div className="relative group flex flex-col justify-center">
@@ -182,7 +182,7 @@ export default function Page() {
                 </span>
               )}
             </div>
-            {/* [고정] 메뉴 순서 */}
+            {/* [고정] 메뉴 순서: 운서-하늘-화장실-최근변경-전체 */}
             <div className="flex gap-1.5 mt-4 overflow-x-auto no-scrollbar pb-1">
               {['운서', '하늘', '화장실', '최근변경', '전체'].map(t => (
                 <button key={t} onClick={() => setActiveTab(t)} className={`px-3.5 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-[11px] ${activeTab === t ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'bg-slate-800/40 text-slate-500 border border-slate-700/30'}`}>{t}</button>
@@ -192,11 +192,11 @@ export default function Page() {
         )}
       </div>
 
-      {/* 리스트 구역 */}
+      {/* 메인 리스트 구역 */}
       {!adminMode && (
         <div className="p-5 space-y-4 relative z-10 min-h-[50px]">
           {filtered.map(i => (
-            <div key={i.id} className="bg-[#111827] p-5 rounded-[2.5rem] border border-slate-800/40 shadow-inner group transition-all hover:border-yellow-500/30 hover:-translate-y-1">
+            <div key={i.id} className="bg-[#111827] p-5 rounded-[2.5rem] border border-slate-800/40 shadow-inner group transition-all">
               <div className="flex justify-between items-start">
                 <div className="flex-1 mr-2">
                   <span className="text-[9px] bg-slate-800 px-2 py-0.5 rounded font-bold text-slate-500 uppercase">{i.region}</span>
@@ -223,7 +223,7 @@ export default function Page() {
         </div>
       )}
 
-      {/* [관리자] 캘린더 및 상세 롤백 대시보드 */}
+      {/* 관리자 캘린더 및 롤백 대시보드 */}
       {adminMode && (
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-center mb-4">
@@ -231,6 +231,7 @@ export default function Page() {
             <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-3 py-1.5 rounded-lg font-bold border border-red-900/30">Exit Admin</button>
           </div>
 
+          {/* 리얼 캘린더 */}
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><CalendarIcon size={16}/> Traffic Calendar</h3>
@@ -250,7 +251,7 @@ export default function Page() {
                 const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const dailyVisits = stats.visitLogs?.filter((v: any) => v.created_at.startsWith(dateStr)).length || 0;
                 return (
-                  <div key={day} className={`aspect-square rounded-lg border border-slate-800 flex flex-col items-center justify-center gap-0.5 transition-all ${dailyVisits > 0 ? 'bg-yellow-500/5 border-yellow-500/20' : 'bg-slate-900/30 opacity-40'}`}>
+                  <div key={day} className={`aspect-square rounded-lg border border-slate-800 flex flex-col items-center justify-center transition-all ${dailyVisits > 0 ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-slate-900/30 opacity-40'}`}>
                     <span className="text-[10px] font-bold text-slate-500">{day}</span>
                     {dailyVisits > 0 && <span className="text-[8px] font-black text-yellow-500">{dailyVisits}</span>}
                   </div>
@@ -259,9 +260,10 @@ export default function Page() {
             </div>
           </div>
 
+          {/* 롤백 및 로그 */}
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-4">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><History size={16}/> Activity Log & Rollback</h3>
+              <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><History size={16}/> Detailed Activity Log</h3>
               <div className="flex gap-2">
                 <button onClick={exportToCSV} className="p-2 bg-slate-800 rounded-lg text-blue-400"><Download size={14}/></button>
                 <label className="p-2 bg-slate-800 rounded-lg text-green-400 cursor-pointer"><Upload size={14}/><input type="file" className="hidden" accept=".csv" onChange={importCSV} /></label>
@@ -273,18 +275,24 @@ export default function Page() {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="text-[10px] text-slate-500 font-bold mb-1">{new Date(log.created_at).toLocaleString()} • IP: {log.ip}</p>
-                      <p className="text-sm font-black text-white">{log.old_name} <span className="text-slate-600 font-normal">정보 수정됨</span></p>
+                      <p className="text-sm font-black text-white">{log.old_name} <span className="text-slate-600 font-normal">Updated</span></p>
                     </div>
                     <button onClick={async () => {
-                      if(confirm(`[${log.old_name}] 정보를 이 시점으로 복구하시겠습니까?`)) {
+                      if(confirm(`[${log.old_name}] 해당 시점의 데이터로 복구할까요?`)) {
                         await supabase.from('buildings').update({ name: log.old_name, password: log.old_password, note: log.old_note }).eq('id', log.building_id);
                         alert('복구 성공'); fetchData(); fetchStats();
                       }
-                    }} className="bg-red-600 text-white p-2 rounded-xl active:scale-90 shadow-lg shadow-red-900/20"><RotateCcw size={14}/></button>
+                    }} className="bg-red-600 text-white p-2 rounded-xl active:scale-90"><RotateCcw size={14}/></button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-white/5">
-                    <div className="bg-slate-900/50 p-2 rounded-lg"><p className="text-[8px] text-slate-600 font-bold uppercase">Before Password</p><p className="text-yellow-600 font-mono font-bold text-xs line-through">{log.old_password}</p></div>
-                    <div className="bg-slate-900/50 p-2 rounded-lg"><p className="text-[8px] text-slate-600 font-bold uppercase">Before Note</p><p className="text-slate-400 text-[10px] truncate">{log.old_note || 'N/A'}</p></div>
+                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-white/5 font-mono">
+                    <div className="bg-slate-900/50 p-2 rounded-lg text-[10px]">
+                      <p className="text-slate-600 mb-1">PREV PW</p>
+                      <p className="text-yellow-600 line-through">{log.old_password}</p>
+                    </div>
+                    <div className="bg-slate-900/50 p-2 rounded-lg text-[10px]">
+                      <p className="text-slate-600 mb-1">PREV NOTE</p>
+                      <p className="text-slate-400 truncate">{log.old_note || 'None'}</p>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -293,7 +301,7 @@ export default function Page() {
         </div>
       )}
 
-      {/* [잠금] 푸터 및 낙관 */}
+      {/* 푸터 및 낙관 */}
       <footer className={`flex flex-col items-center text-center px-6 transition-all duration-700 relative z-10 ${isInitialState ? 'mt-24 opacity-100' : 'mt-10 opacity-30 scale-95'}`}>
         <div className="w-full max-w-sm bg-[#1e293b]/60 backdrop-blur-md p-8 rounded-[3.5rem] border border-slate-800 shadow-2xl flex flex-col items-center gap-5">
           <AnRaMuBokSeal className="w-16 h-16 shadow-2xl shadow-red-900/40" />
@@ -305,15 +313,15 @@ export default function Page() {
             </p>
           </div>
           <div className="w-12 h-px bg-slate-800 mx-auto opacity-50 my-1"></div>
-          <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group">
+          <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group transition-all">
             <p className="text-[12px] text-white font-bold tracking-tight">
-              만든이 : <span className="text-yellow-400 font-black ml-1 uppercase group-hover:text-white">부업맨 HoJun</span>
+              만든이 : <span className="text-yellow-400 font-black ml-1 uppercase">부업맨 HoJun</span>
             </p>
           </div>
         </div>
       </footer>
 
-      {/* 모달 및 플로팅 버튼 (고정) */}
+      {/* 모달 및 플로팅 버튼 */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-sm">
           <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl break-keep">
