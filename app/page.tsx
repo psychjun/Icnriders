@@ -92,11 +92,21 @@ export default function Page() {
     fetchData();
   };
 
+  // [수정] 검색 시에는 지역 탭을 무시하고 전체에서 검색, 검색어가 없으면 지역 탭 필터 적용
   const isInitialState = activeTab === 'Home' && searchTerm === '';
   let filtered = isInitialState ? [] : data.filter(i => {
-    const regionMatch = (activeTab === '전체' || activeTab === '최근변경' || activeTab === 'Home') || i.region === activeTab;
     const lowerSearch = searchTerm.toLowerCase();
-    return regionMatch && (i.name.toLowerCase().includes(lowerSearch) || i.password.includes(searchTerm) || getChosung(i.name).includes(lowerSearch));
+    const chosung = getChosung(i.name);
+    const searchMatch = i.name.toLowerCase().includes(lowerSearch) || i.password.includes(searchTerm) || chosung.includes(lowerSearch);
+
+    if (searchTerm !== '') {
+      // 검색어가 있으면 지역 상관없이 결과 노출
+      return searchMatch;
+    } else {
+      // 검색어가 없으면 현재 선택된 탭에 맞춰 노출
+      const regionMatch = (activeTab === '전체' || activeTab === '최근변경' || activeTab === 'Home') || i.region === activeTab;
+      return regionMatch;
+    }
   });
 
   if (activeTab === '최근변경') {
@@ -110,7 +120,7 @@ export default function Page() {
     <div className="min-h-screen bg-[#070b14] text-white font-sans tracking-tight pb-40 relative overflow-x-hidden">
       <div className="fixed inset-0 bg-[url('https://images.unsplash.com/photo-1558981285-6f0c94958bb6?q=80&w=1000&auto=format')] bg-cover bg-center opacity-[0.04] grayscale pointer-events-none z-0"></div>
 
-      {/* 헤더 섹션 [잠금] */}
+      {/* 헤더 [잠금] */}
       <div className="bg-[#0f172a]/95 border-b border-slate-800/60 sticky top-0 z-40 backdrop-blur-lg shadow-2xl">
         <div className="p-3.5 flex items-center justify-between gap-2 relative z-10">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -126,6 +136,7 @@ export default function Page() {
           </button>
         </div>
 
+        {/* 검색창 [잠금] 안내 문구 유지 */}
         {!adminMode && (
           <div className="px-5 pb-5 relative z-10">
             <div className="relative group flex flex-col justify-center">
@@ -147,12 +158,11 @@ export default function Page() {
         )}
       </div>
 
-      {/* 리스트 구역 [개선된 카드 디자인] */}
+      {/* 리스트 구역 [잠금] 시안성 강화 레이아웃 유지 */}
       {!adminMode && (
         <div className="p-5 space-y-5 relative z-10 min-h-[50px]">
           {filtered.map(i => (
             <div key={i.id} className="bg-[#111827]/90 p-5 rounded-[2.5rem] border border-slate-800/60 shadow-2xl transition-all">
-              {/* 카드 상단: 지역, 이름, 주소 */}
               <div className="flex justify-between items-start mb-4">
                 <div className="flex-1 mr-4">
                   <div className="flex items-center gap-1.5 mb-2">
@@ -161,25 +171,21 @@ export default function Page() {
                   </div>
                   <h2 className="text-xl font-black text-white tracking-tighter break-keep leading-tight">{i.name}</h2>
                   {i.address && (
-                    <button onClick={() => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(i.address)}`, '_blank')} className="flex items-center gap-1 mt-1 text-blue-400 text-[10px] font-bold opacity-70 hover:opacity-100 transition-opacity">
+                    <button onClick={() => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(i.address)}`, '_blank')} className="flex items-center gap-1 mt-1 text-blue-400 text-[10px] font-bold opacity-70 hover:opacity-100">
                       <MapPin size={10} /> {i.address} <ExternalLink size={10} />
                     </button>
                   )}
                 </div>
                 <div className="flex gap-1.5 shrink-0">
-                  <button onClick={() => {setEditingItem(i); setFormData({ region: i.region, name: i.name, password: i.password, note: i.note, address: i.address || '', b_type: i.b_type || '' }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-800/50 active:scale-90 transition-all"><Edit2 size={16} /></button>
-                  <button onClick={() => {navigator.clipboard.writeText(i.password); alert('복사됨');}} className="bg-yellow-500 p-2.5 rounded-xl text-black shadow-lg shadow-yellow-500/10 active:scale-90 transition-all"><Copy size={18} /></button>
+                  <button onClick={() => {setEditingItem(i); setFormData({ region: i.region, name: i.name, password: i.password, note: i.note, address: i.address || '', b_type: i.b_type || '' }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-800/50"><Edit2 size={16} /></button>
+                  <button onClick={() => {navigator.clipboard.writeText(i.password); alert('복사됨');}} className="bg-yellow-500 p-2.5 rounded-xl text-black active:scale-90 transition-all"><Copy size={18} /></button>
                 </div>
               </div>
 
-              {/* 카드 하단: 비밀번호 영역과 특이사항을 위아래로 분리하여 시안성 확보 */}
               <div className="space-y-3">
-                {/* 비밀번호 박스: 독립적인 검정 배경 박스로 강조 */}
                 <div className="bg-black/40 border border-slate-800/40 p-4 rounded-3xl flex items-center justify-center">
                    <span className="text-4xl font-mono font-black text-yellow-400 tracking-tighter drop-shadow-md">{i.password}</span>
                 </div>
-                
-                {/* 특이사항 영역: 아래쪽에 여유 있게 배치 */}
                 {i.note && (
                   <div className="px-1">
                     <p className="text-[12px] text-slate-400 font-medium leading-relaxed break-keep">
@@ -187,7 +193,6 @@ export default function Page() {
                     </p>
                   </div>
                 )}
-                
                 {activeTab === '최근변경' && (
                   <p className="text-[8px] text-slate-700 font-bold uppercase italic px-1">Updated: {new Date(i.updated_at).toLocaleString()}</p>
                 )}
@@ -202,7 +207,7 @@ export default function Page() {
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-black text-yellow-400 flex items-center gap-2 uppercase tracking-tighter"><ShieldCheck /> Admin</h2>
-            <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-3 py-1.5 rounded-lg font-bold border border-red-900/30">Exit</button>
+            <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-3 py-1.5 rounded-lg font-bold border border-red-900/30">Exit Admin</button>
           </div>
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-4 text-xs">
             <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><History size={16}/> Rollback Log</h3>
@@ -227,8 +232,8 @@ export default function Page() {
             <p className="text-[15px] text-white font-black leading-snug tracking-tight break-keep">오늘도 영종도의 모든 길 위에서<br /><span className="text-yellow-400 font-black">안라무복</span>하시길 기원합니다.</p>
           </div>
           <div className="w-12 h-px bg-slate-800 mx-auto opacity-50 my-1"></div>
-          <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group">
-            <p className="text-[12px] text-white font-bold tracking-tight">만든이 : <span className="text-yellow-400 font-black ml-1 uppercase group-hover:text-white transition-colors">부업맨 HoJun</span></p>
+          <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group transition-all">
+            <p className="text-[12px] text-white font-bold tracking-tight">만든이 : <span className="text-yellow-400 font-black ml-1 uppercase transition-colors">부업맨 HoJun</span></p>
           </div>
         </div>
       </footer>
@@ -241,7 +246,7 @@ export default function Page() {
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-2">
                 {['운서', '하늘', '화장실'].map(r => (
-                  <button key={r} onClick={() => setFormData({...formData, region: r})} className={`py-2 rounded-xl font-bold border transition-all ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{r}</button>
+                  <button key={r} onClick={() => setFormData({...formData, region: r})} className={`py-2 rounded-xl font-bold border transition-all ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg shadow-yellow-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{r}</button>
                 ))}
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -254,8 +259,8 @@ export default function Page() {
               <input type="text" placeholder="네이버 연동 주소" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-blue-400 text-xs outline-none focus:border-blue-500 placeholder:text-slate-800 shadow-inner" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
               <textarea placeholder="특이사항" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none h-20 placeholder:text-slate-800 shadow-inner" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
               <div className="flex gap-2.5 mt-2">
-                <button onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-800 p-5 rounded-2xl font-bold text-white border border-slate-700/50 active:scale-95 transition-all">Cancel</button>
-                <button onClick={handleSave} className="flex-[2] bg-yellow-500 text-black p-5 rounded-2xl font-black text-xl shadow-xl shadow-yellow-500/10 active:scale-95 transition-all">Submit</button>
+                <button onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-800 p-5 rounded-2xl font-bold text-white border border-slate-700/50 active:scale-95">Cancel</button>
+                <button onClick={handleSave} className="flex-[2] bg-yellow-500 text-black p-5 rounded-2xl font-black text-xl shadow-xl shadow-yellow-500/10 active:scale-95">Submit</button>
               </div>
             </div>
           </div>
