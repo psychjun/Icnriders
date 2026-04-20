@@ -63,7 +63,7 @@ export default function Page() {
   }, []);
 
   const handleSave = async () => {
-    if (!formData.name || !formData.password) return alert('내용을 입력하세요!');
+    if (!formData.name || !formData.password) return alert('빈칸을 채워주세요!');
     if (editingItem) {
       await supabase.from('building_logs').insert([{
         building_id: editingItem.id, old_name: editingItem.name, old_password: editingItem.password, old_note: editingItem.note
@@ -104,35 +104,40 @@ export default function Page() {
       {/* 배경 감성 이미지 */}
       <div className="fixed inset-0 bg-[url('https://images.unsplash.com/photo-1558981285-6f0c94958bb6?q=80&w=1000&auto=format')] bg-cover bg-center opacity-[0.04] grayscale pointer-events-none z-0"></div>
 
-      {/* 헤더 */}
+      {/* 헤더: 로고와 제목 사이즈 최적화 */}
       <div className="bg-[#0f172a]/95 border-b border-slate-800/60 sticky top-0 z-40 backdrop-blur-lg shadow-2xl">
-        <div className="p-5 flex items-center gap-4 relative z-10">
-          <DeliveryScooterLogo className="w-16 h-16 drop-shadow-[0_0_10px_rgba(234,179,8,0.3)]" />
-          <div className="flex-1">
-            <h1 className="text-2xl font-black text-white italic tracking-tighter">영종도 <span className="text-yellow-400">배달 라이더</span></h1>
-            <p className="text-[10px] text-slate-500 font-bold uppercase mt-1 tracking-widest">공동현관 출입 정보망</p>
+        <div className="p-4 flex items-center gap-3 relative z-10"> {/* 간격 gap-3으로 축소 */}
+          {/* [수정] 로고 크기 줄임 (w-12 h-12) */}
+          <DeliveryScooterLogo className="w-12 h-12 drop-shadow-[0_0_10px_rgba(234,179,8,0.3)]" />
+          
+          {/* [수정] 제목 영역: whitespace-nowrap으로 줄바꿈 방지 */}
+          <div className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">
+            <h1 className="text-xl font-black text-white italic tracking-tighter uppercase inline">
+              영종도 <span className="text-yellow-400">배달 라이더</span>
+            </h1>
+            {/* 구분선 추가 */}
+            <span className="mx-2 text-slate-700">//</span>
+            {/* [수정] 부제목: inline으로 제목 옆에 배치, 글자 크기 최적화 */}
+            <span className="text-xs text-slate-500 font-bold uppercase tracking-widest inline">
+              공동현관 출입 정보망
+            </span>
           </div>
+
           <div className="text-[9px] font-bold text-slate-400 bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-800 flex items-center gap-1.5 shadow-inner">
             <BarChart3 size={10} className="text-yellow-500"/> {stats.visits} 접속
           </div>
         </div>
 
-        {/* 검색창: 투명한 초성 안내 문구 삽입 */}
+        {/* 검색창 구역 (초성 안내문구 매립) */}
         <div className="px-5 pb-5 relative z-10">
-          <div className="relative group flex flex-col justify-center">
+          <div className="relative group flex items-center">
             <Search className="absolute left-4 text-slate-700 group-focus-within:text-yellow-500 transition-colors pointer-events-none z-20" size={20} />
             <input 
-              type="text" 
-              className="w-full p-4.5 pl-12 bg-[#1e293b] rounded-2xl border border-slate-700/50 focus:border-yellow-500/60 text-lg focus:outline-none shadow-xl transition-all font-bold" 
+              type="text" placeholder="건물명 초성 검색 가능 (예: ㄱㄹㄷㅂ)" 
+              className="w-full p-4 pl-12 bg-[#1e293b] rounded-2xl border border-slate-700/50 focus:border-yellow-500/60 text-lg focus:outline-none placeholder:text-slate-800 shadow-xl transition-all font-bold" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)} 
             />
-            {/* 투명하고 작은 초성 안내 문구 */}
-            {!searchTerm && (
-              <span className="absolute left-12 text-[13px] text-slate-600 font-bold pointer-events-none opacity-50">
-                건물명 초성 검색 가능 (예: ㄱㄹㄷㅂ)
-              </span>
-            )}
           </div>
           
           <div className="flex gap-2 mt-5 overflow-x-auto no-scrollbar pb-1">
@@ -146,13 +151,13 @@ export default function Page() {
       </div>
 
       {/* 리스트 구역 */}
-      <div className="p-5 space-y-4 relative z-10">
+      <div className="p-5 space-y-4 relative z-10 min-h-[50px]">
         {filtered.map(i => (
           <div key={i.id} className="bg-[#111827] p-5 rounded-[2.5rem] border border-slate-800/40 shadow-inner group transition-all">
             <div className="flex justify-between items-start">
               <div className="flex-1 mr-2">
                 <span className="text-[9px] bg-slate-800 px-2 py-0.5 rounded font-bold text-slate-500 uppercase tracking-widest">{i.region}</span>
-                <h2 className="text-xl font-bold mt-1 text-white leading-snug tracking-tight break-keep">{i.name}</h2>
+                <h2 className="text-xl font-bold mt-1 text-white tracking-tight break-keep">{i.name}</h2>
               </div>
               <div className="flex gap-1.5">
                 <button onClick={() => showHistory(i.id)} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-blue-400 border border-slate-700/20 active:scale-90 transition-transform"><History size={16} /></button>
@@ -166,21 +171,18 @@ export default function Page() {
             </div>
           </div>
         ))}
-        {searchTerm !== '' && filtered.length === 0 && (
-          <p className="text-center py-10 text-slate-600 text-sm font-bold italic">검색 결과가 없습니다.</p>
-        )}
       </div>
 
-      {/* 푸터: 낙관 로고와 안전 문구, 만든이 정보 */}
+      {/* [최종 푸터] 낙관, 영문 문구, 한글 문구, 만든이의 완벽한 배치 */}
       <footer className={`flex flex-col items-center text-center px-6 transition-all duration-700 relative z-10 ${isInitialState ? 'mt-24 opacity-100' : 'mt-10 opacity-30 scale-95'}`}>
-        <div className="w-full max-w-sm bg-[#1e293b]/60 backdrop-blur-md p-8 rounded-[3.5rem] border border-slate-800 shadow-2xl flex flex-col items-center gap-5">
+        <div className="w-full max-w-sm bg-[#1e293b]/60 backdrop-blur-md p-8 rounded-[3rem] border border-slate-800 shadow-2xl flex flex-col items-center gap-5">
           <AnRaMuBokSeal className="w-16 h-16 shadow-2xl shadow-red-900/40" />
           
           <div className="space-y-2">
-            <p className="text-[11px] text-yellow-500 font-black tracking-[0.2em] uppercase mb-1">STAY ALERT, RIDE SAFE</p>
+            <p className="text-[11px] text-yellow-500 font-black tracking-[0.2em] uppercase">STAY ALERT, RIDE SAFE</p>
             <p className="text-[15px] text-white font-black leading-snug tracking-tight break-keep">
               오늘도 영종도의 모든 길 위에서<br />
-              <span className="text-yellow-500 font-black">안라무복</span>하시길 기원합니다.
+              <span className="text-yellow-400 font-black">안라무복</span>하시길 기원합니다.
             </p>
           </div>
 
@@ -196,15 +198,15 @@ export default function Page() {
       </footer>
 
       {/* 플로팅 버튼 */}
-      <button onClick={() => {setEditingItem(null); setFormData({ region: '운서', name: '', password: '', note: '' }); setIsModalOpen(true);}} className="fixed bottom-10 right-8 bg-yellow-500 text-black p-5 rounded-2xl shadow-2xl shadow-yellow-500/40 z-50 active:scale-90 transition-all hover:scale-105 animate-pulse">
+      <button onClick={() => {setEditingItem(null); setFormData({ region: '운서', name: '', password: '', note: '' }); setIsModalOpen(true);}} className="fixed bottom-10 right-8 bg-yellow-500 text-black p-5 rounded-2xl shadow-2xl shadow-yellow-500/40 z-50 active:scale-90 transition-all hover:animate-none animate-pulse">
         <Plus size={30} strokeWidth={3} />
       </button>
 
-      {/* 히스토리 모달 */}
+      {/* 히스토리 모달 (롤백 기능 포함) */}
       {historyModal.open && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[200] flex items-center justify-center p-6 text-sm">
           <div className="bg-[#1e293b] w-full max-w-md rounded-[2.5rem] p-8 border border-slate-700/40 shadow-3xl break-keep">
-            <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4 text-white font-black uppercase tracking-tighter">
+            <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4 text-white font-black uppercase tracking-tighter break-keep">
               <h3 className="flex items-center gap-2"><History size={18}/> History Logs</h3>
               <button onClick={() => setHistoryModal({ ...historyModal, open: false })} className="bg-slate-800 p-2 rounded-xl text-white"><X size={18}/></button>
             </div>
@@ -224,21 +226,21 @@ export default function Page() {
         </div>
       )}
 
-      {/* 등록/수정 모달 */}
+      {/* 등록 모달 */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-sm">
-          <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl break-keep">
-            <h3 className="text-2xl font-black text-yellow-400 mb-8 tracking-tighter uppercase break-keep">{editingItem ? 'Edit Info' : 'New Entry'}</h3>
-            <div className="space-y-5">
-              <div className="grid grid-cols-3 gap-2">
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6text-sm text-sm">
+          <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl text-sm break-keep break-keep">
+            <h3 className="text-2xl font-black text-yellow-400 mb-8 tracking-tighter uppercase break-keep break-keep">{editingItem ? 'Edit Info' : 'New Entry'}</h3>
+            <div className="space-y-5 text-sm text-sm">
+              <div className="grid grid-cols-3 gap-2 gap-2">
                 {['운서', '하늘', '화장실'].map(r => (
-                  <button key={r} onClick={() => setFormData({...formData, region: r})} className={`py-3 rounded-2xl font-bold border transition-all ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg' : 'bg-slate-900/50 border-slate-800 text-slate-600 bg-slate-800/50'}`}>{r}</button>
+                  <button key={r} onClick={() => setFormData({...formData, region: r})} className={`py-3 rounded-2xl font-bold border transition-all text-sm ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg shadow-yellow-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600 bg-slate-800/50'}`}>{r}</button>
                 ))}
               </div>
-              <input type="text" placeholder="건물 명칭" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold shadow-inner placeholder:text-slate-800" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+              <input type="text" placeholder="건물 명칭" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold placeholder:text-slate-800 shadow-inner break-keep break-keep" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
               <input type="text" placeholder="현관 비밀번호" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-yellow-400 font-mono text-xl outline-none focus:border-yellow-500 shadow-inner placeholder:text-slate-800" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-              <textarea placeholder="특이사항" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none h-28 shadow-inner placeholder:text-slate-800" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
-              <div className="flex gap-2">
+              <textarea placeholder="특이사항" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none h-28 placeholder:text-slate-800 shadow-inner break-keep h-24" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
+              <div className="flex gap-2.5 mt-4 mt-4">
                 <button onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-800 p-5 rounded-2xl font-bold active:scale-95 transition-all text-white border border-slate-700/50 hover:bg-slate-700">Cancel</button>
                 <button onClick={handleSave} className="flex-[2] bg-yellow-500 text-black p-5 rounded-2xl font-black text-xl shadow-xl shadow-yellow-500/10 active:scale-95 transition-all hover:bg-yellow-400">Submit</button>
               </div>
