@@ -42,7 +42,8 @@ export default function Page() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [stats, setStats] = useState({ visits: 0, logs: [] as any[], visitLogs: [] as any[] });
-  const [formData, setFormData] = useState({ region: '운서', name: '', password: '', note: '', address: '', b_type: '' });
+  // [수정] 기본 지역 선택 해제 (빈값)
+  const [formData, setFormData] = useState({ region: '', name: '', password: '', note: '', address: '', b_type: '' });
   const [ip, setIp] = useState('');
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -80,7 +81,9 @@ export default function Page() {
   };
 
   const handleSave = async () => {
-    if (!formData.name || !formData.password) return alert('필수 내용을 입력하세요.');
+    // [수정] 지역(region)은 필수가 아님. 건물명과 비번만 체크.
+    if (!formData.name || !formData.password) return alert('건물명과 비밀번호는 필수입니다.');
+    
     const logData = { building_id: editingItem?.id, old_name: editingItem?.name, old_password: editingItem?.password, old_note: editingItem?.note, old_address: editingItem?.address, old_b_type: editingItem?.b_type, ip };
     if (editingItem) {
       await supabase.from('building_logs').insert([logData]);
@@ -92,29 +95,23 @@ export default function Page() {
     fetchData();
   };
 
-  // [수정] 검색 시에는 지역 탭을 무시하고 전체에서 검색, 검색어가 없으면 지역 탭 필터 적용
+  // [잠금] 초기 화면 및 검색 로직
   const isInitialState = activeTab === 'Home' && searchTerm === '';
   let filtered = isInitialState ? [] : data.filter(i => {
     const lowerSearch = searchTerm.toLowerCase();
     const chosung = getChosung(i.name);
     const searchMatch = i.name.toLowerCase().includes(lowerSearch) || i.password.includes(searchTerm) || chosung.includes(lowerSearch);
 
-    if (searchTerm !== '') {
-      // 검색어가 있으면 지역 상관없이 결과 노출
-      return searchMatch;
-    } else {
-      // 검색어가 없으면 현재 선택된 탭에 맞춰 노출
-      const regionMatch = (activeTab === '전체' || activeTab === '최근변경' || activeTab === 'Home') || i.region === activeTab;
-      return regionMatch;
-    }
+    if (searchTerm !== '') return searchMatch;
+    
+    // [수정] 지역 탭 필터링 (Home일 때는 검색 결과만, 그 외엔 해당 지역만)
+    const regionMatch = (activeTab === '전체' || activeTab === '최근변경' || activeTab === 'Home') || i.region === activeTab;
+    return regionMatch;
   });
 
   if (activeTab === '최근변경') {
     filtered = [...filtered].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   }
-
-  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
-  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
   return (
     <div className="min-h-screen bg-[#070b14] text-white font-sans tracking-tight pb-40 relative overflow-x-hidden">
@@ -131,12 +128,12 @@ export default function Page() {
               <span className="text-[9px] text-slate-500 font-bold tracking-tighter truncate font-mono uppercase">Access Point Info</span>
             </div>
           </div>
-          <button onClick={handleAdminAuth} className="text-[8px] font-bold text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-800 flex items-center gap-1 shrink-0 shadow-inner">
+          <button onClick={handleAdminAuth} className="text-[8px] font-bold text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-800 flex items-center gap-1 shadow-inner active:scale-95 transition-all">
             <BarChart3 size={9} className="text-yellow-500"/> {stats.visits}
           </button>
         </div>
 
-        {/* 검색창 [잠금] 안내 문구 유지 */}
+        {/* 검색 및 탭 [수정: 운남 추가 및 토글 적용] */}
         {!adminMode && (
           <div className="px-5 pb-5 relative z-10">
             <div className="relative group flex flex-col justify-center">
@@ -150,15 +147,15 @@ export default function Page() {
               {!searchTerm && <span className="absolute left-11 text-[12px] text-slate-700 font-bold pointer-events-none opacity-50">건물명 초성 검색 가능 (예: ㄱㄹㄷㅂ)</span>}
             </div>
             <div className="flex gap-1.5 mt-4 overflow-x-auto no-scrollbar pb-1">
-              {['운서', '하늘', '화장실', '최근변경', '전체'].map(t => (
-                <button key={t} onClick={() => setActiveTab(t)} className={`px-3.5 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-[11px] ${activeTab === t ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'bg-slate-800/40 text-slate-500 border border-slate-700/30'}`}>{t}</button>
+              {['운서', '하늘', '운남', '화장실', '최근변경', '전체'].map(t => (
+                <button key={t} onClick={() => setActiveTab(activeTab === t ? 'Home' : t)} className={`px-3.5 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-[11px] ${activeTab === t ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'bg-slate-800/40 text-slate-500 border border-slate-700/30'}`}>{t}</button>
               ))}
             </div>
           </div>
         )}
       </div>
 
-      {/* 리스트 구역 [잠금] 시안성 강화 레이아웃 유지 */}
+      {/* 리스트 구역 [잠금: 시안성 디자인] */}
       {!adminMode && (
         <div className="p-5 space-y-5 relative z-10 min-h-[50px]">
           {filtered.map(i => (
@@ -166,19 +163,19 @@ export default function Page() {
               <div className="flex justify-between items-start mb-4">
                 <div className="flex-1 mr-4">
                   <div className="flex items-center gap-1.5 mb-2">
-                    <span className="text-[8px] bg-slate-800 px-2 py-0.5 rounded-lg font-black text-slate-500 uppercase tracking-widest">{i.region}</span>
+                    {i.region && <span className="text-[8px] bg-slate-800 px-2 py-0.5 rounded-lg font-black text-slate-500 uppercase tracking-widest">{i.region}</span>}
                     {i.b_type && <span className="text-[8px] bg-yellow-500/10 px-2 py-0.5 rounded-lg font-black text-yellow-500 uppercase tracking-widest border border-yellow-500/20">{i.b_type}</span>}
                   </div>
                   <h2 className="text-xl font-black text-white tracking-tighter break-keep leading-tight">{i.name}</h2>
                   {i.address && (
-                    <button onClick={() => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(i.address)}`, '_blank')} className="flex items-center gap-1 mt-1 text-blue-400 text-[10px] font-bold opacity-70 hover:opacity-100">
+                    <button onClick={() => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(i.address)}`, '_blank')} className="flex items-center gap-1 mt-1 text-blue-400 text-[10px] font-bold opacity-70 hover:opacity-100 transition-opacity">
                       <MapPin size={10} /> {i.address} <ExternalLink size={10} />
                     </button>
                   )}
                 </div>
                 <div className="flex gap-1.5 shrink-0">
-                  <button onClick={() => {setEditingItem(i); setFormData({ region: i.region, name: i.name, password: i.password, note: i.note, address: i.address || '', b_type: i.b_type || '' }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-800/50"><Edit2 size={16} /></button>
-                  <button onClick={() => {navigator.clipboard.writeText(i.password); alert('복사됨');}} className="bg-yellow-500 p-2.5 rounded-xl text-black active:scale-90 transition-all"><Copy size={18} /></button>
+                  <button onClick={() => {setEditingItem(i); setFormData({ region: i.region || '', name: i.name, password: i.password, note: i.note, address: i.address || '', b_type: i.b_type || '' }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-800/50 active:scale-90 transition-all"><Edit2 size={16} /></button>
+                  <button onClick={() => {navigator.clipboard.writeText(i.password); alert('복사됨');}} className="bg-yellow-500 p-2.5 rounded-xl text-black shadow-lg shadow-yellow-500/10 active:scale-90 transition-all"><Copy size={18} /></button>
                 </div>
               </div>
 
@@ -193,29 +190,26 @@ export default function Page() {
                     </p>
                   </div>
                 )}
-                {activeTab === '최근변경' && (
-                  <p className="text-[8px] text-slate-700 font-bold uppercase italic px-1">Updated: {new Date(i.updated_at).toLocaleString()}</p>
-                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* 관리자 모드 UI 유지 */}
+      {/* 관리자 로그 UI (유지) */}
       {adminMode && (
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-black text-yellow-400 flex items-center gap-2 uppercase tracking-tighter"><ShieldCheck /> Admin</h2>
-            <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-3 py-1.5 rounded-lg font-bold border border-red-900/30">Exit Admin</button>
+            <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-3 py-1.5 rounded-lg font-bold border border-red-900/30">Exit</button>
           </div>
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-4 text-xs">
             <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><History size={16}/> Rollback Log</h3>
             <div className="space-y-3 max-h-80 overflow-y-auto no-scrollbar">
               {stats.logs.map((log: any, idx: number) => (
                 <div key={idx} className="bg-black/40 p-4 rounded-2xl border border-slate-800 border-l-4 border-l-red-600/50 flex justify-between items-center">
-                  <div><p className="text-yellow-500 font-mono font-bold">{log.old_password}</p><p className="text-slate-500 text-[10px]">{new Date(log.created_at).toLocaleString()}</p></div>
-                  <button onClick={async () => { if(confirm('복구할까요?')) { await supabase.from('buildings').update({ name: log.old_name, password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type }).eq('id', log.building_id); fetchData(); fetchStats(); } }} className="bg-red-600 text-white p-2 rounded-xl"><RotateCcw size={14}/></button>
+                  <div><p className="text-yellow-500 font-mono font-bold">{log.old_password} <span className="text-slate-600">({log.old_region || 'N/A'})</span></p><p className="text-slate-500 text-[10px]">{new Date(log.created_at).toLocaleString()}</p></div>
+                  <button onClick={async () => { if(confirm('복구할까요?')) { await supabase.from('buildings').update({ name: log.old_name, password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region }).eq('id', log.building_id); fetchData(); fetchStats(); } }} className="bg-red-600 text-white p-2 rounded-xl active:scale-90 transition-all"><RotateCcw size={14}/></button>
                 </div>
               ))}
             </div>
@@ -232,35 +226,37 @@ export default function Page() {
             <p className="text-[15px] text-white font-black leading-snug tracking-tight break-keep">오늘도 영종도의 모든 길 위에서<br /><span className="text-yellow-400 font-black">안라무복</span>하시길 기원합니다.</p>
           </div>
           <div className="w-12 h-px bg-slate-800 mx-auto opacity-50 my-1"></div>
-          <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group transition-all">
+          <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group">
             <p className="text-[12px] text-white font-bold tracking-tight">만든이 : <span className="text-yellow-400 font-black ml-1 uppercase transition-colors">부업맨 HoJun</span></p>
           </div>
         </div>
       </footer>
 
-      {/* 모달 [잠금] */}
+      {/* 모달 [수정: 지역 토글 및 운남 추가] */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-sm">
           <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl break-keep">
             <h3 className="text-2xl font-black text-yellow-400 mb-8 tracking-tighter uppercase">{editingItem ? 'Edit Info' : 'New Entry'}</h3>
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-2">
-                {['운서', '하늘', '화장실'].map(r => (
-                  <button key={r} onClick={() => setFormData({...formData, region: r})} className={`py-2 rounded-xl font-bold border transition-all ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg shadow-yellow-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{r}</button>
+              {/* 지역 토글 버튼 (운남 추가) */}
+              <div className="grid grid-cols-4 gap-2">
+                {['운서', '하늘', '운남', '화장실'].map(r => (
+                  <button key={r} onClick={() => setFormData({...formData, region: formData.region === r ? '' : r})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg shadow-yellow-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{r}</button>
                 ))}
               </div>
+              {/* 타입 토글 버튼 */}
               <div className="grid grid-cols-3 gap-2">
                 {['아파트', '오피스텔', '빌라'].map(t => (
-                  <button key={t} onClick={() => setFormData({...formData, b_type: formData.b_type === t ? '' : t})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.b_type === t ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{t}</button>
+                  <button key={t} onClick={() => setFormData({...formData, b_type: formData.b_type === t ? '' : t})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.b_type === t ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{t}</button>
                 ))}
               </div>
-              <input type="text" placeholder="건물 명칭" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold placeholder:text-slate-800 shadow-inner" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-              <input type="text" placeholder="현관 비밀번호" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-yellow-400 font-mono text-xl outline-none focus:border-yellow-500 placeholder:text-slate-800 shadow-inner" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+              <input type="text" placeholder="건물 명칭 (필수)" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold placeholder:text-slate-800 shadow-inner" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+              <input type="text" placeholder="현관 비밀번호 (필수)" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-yellow-400 font-mono text-xl outline-none focus:border-yellow-500 placeholder:text-slate-800 shadow-inner" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
               <input type="text" placeholder="네이버 연동 주소" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-blue-400 text-xs outline-none focus:border-blue-500 placeholder:text-slate-800 shadow-inner" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
               <textarea placeholder="특이사항" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none h-20 placeholder:text-slate-800 shadow-inner" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
               <div className="flex gap-2.5 mt-2">
-                <button onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-800 p-5 rounded-2xl font-bold text-white border border-slate-700/50 active:scale-95">Cancel</button>
-                <button onClick={handleSave} className="flex-[2] bg-yellow-500 text-black p-5 rounded-2xl font-black text-xl shadow-xl shadow-yellow-500/10 active:scale-95">Submit</button>
+                <button onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-800 p-5 rounded-2xl font-bold text-white border border-slate-700/50 active:scale-95 transition-all">Cancel</button>
+                <button onClick={handleSave} className="flex-[2] bg-yellow-500 text-black p-5 rounded-2xl font-black text-xl shadow-xl shadow-yellow-500/10 active:scale-95 transition-all">Submit</button>
               </div>
             </div>
           </div>
@@ -268,7 +264,7 @@ export default function Page() {
       )}
 
       {!adminMode && (
-        <button onClick={() => {setEditingItem(null); setFormData({ region: '운서', name: '', password: '', note: '', address: '', b_type: '' }); setIsModalOpen(true);}} className="fixed bottom-10 right-8 bg-yellow-500 text-black p-5 rounded-2xl shadow-2xl z-50 active:scale-90 transition-all animate-pulse">
+        <button onClick={() => {setEditingItem(null); setFormData({ region: '', name: '', password: '', note: '', address: '', b_type: '' }); setIsModalOpen(true);}} className="fixed bottom-10 right-8 bg-yellow-500 text-black p-5 rounded-2xl shadow-2xl z-50 active:scale-90 transition-all animate-pulse">
           <Plus size={30} strokeWidth={3} />
         </button>
       )}
