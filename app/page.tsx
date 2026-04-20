@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
-// 한글 초성 검색 엔진
+// 초성 검색 엔진
 const getChosung = (str: string) => {
   const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
   let result = "";
@@ -20,17 +20,17 @@ const getChosung = (str: string) => {
   return result;
 };
 
-// [로고] 깃허브에 올린 노란색 이미지를 로고로 사용하는 컴포넌트
+// [로고] public 폴더에 올린 logo.png를 사용하는 컴포넌트
 const DeliveryScooterLogo = ({ className = "" }) => (
   <img 
-    src="여기에_깃허브_이미지_주소를_넣으세요" 
+    src="/logo.png" 
     alt="영종도 라이더 로고"
     className={`${className} object-contain`}
   />
 );
 
-// [아이콘] 안라무복 낙관(도장)
-const SealIcon = ({ className = "" }) => (
+// [아이콘] 안라무복 낙관(도장) 커스텀 SVG
+const AnRaMuBokSeal = ({ className = "" }) => (
   <svg viewBox="0 0 100 100" className={className} xmlns="http://www.w3.org/2000/svg">
     <path d="M12,10 Q8,8 10,14 L8,86 Q8,92 14,90 L86,92 Q92,92 90,86 L92,14 Q92,8 86,10 Z" fill="#cc0000" />
     <text x="50" y="45" textAnchor="middle" fill="white" fontSize="28" fontWeight="900" style={{fontFamily: 'serif'}}>안라</text>
@@ -88,7 +88,7 @@ export default function Page() {
     fetchData();
   };
 
-  // UI 로직: 초기 진입 시 리스트를 비워 낙관 로고와 만든이 정보를 강조함
+  // UI 로직: 초기 진입 시(검색어 없고 전체 탭일 때) 리스트를 비워 푸터를 강조함
   const isInitialState = searchTerm === '' && activeTab === '전체';
   const filtered = isInitialState ? [] : data.filter(i => {
     const regionMatch = activeTab === '전체' || i.region === activeTab;
@@ -100,14 +100,16 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-[#070b14] text-white font-sans tracking-tight pb-40 relative overflow-x-hidden">
+      
+      {/* 배경 감성 이미지 */}
       <div className="fixed inset-0 bg-[url('https://images.unsplash.com/photo-1558981285-6f0c94958bb6?q=80&w=1000&auto=format')] bg-cover bg-center opacity-[0.04] grayscale pointer-events-none z-0"></div>
 
       {/* 헤더 */}
       <div className="bg-[#0f172a]/95 border-b border-slate-800/60 sticky top-0 z-40 backdrop-blur-lg shadow-2xl">
         <div className="p-5 flex items-center gap-4 relative z-10">
-          <DeliveryScooterLogo className="w-16 h-16 drop-shadow-[0_0_8px_rgba(234,179,8,0.4)]" />
+          <DeliveryScooterLogo className="w-16 h-16 drop-shadow-[0_0_10px_rgba(234,179,8,0.3)]" />
           <div className="flex-1">
-            <h1 className="text-2xl font-black text-white italic tracking-tighter uppercase">영종도 <span className="text-yellow-400">배달 라이더</span></h1>
+            <h1 className="text-2xl font-black text-white italic tracking-tighter">영종도 <span className="text-yellow-400">배달 라이더</span></h1>
             <p className="text-[10px] text-slate-500 font-bold uppercase mt-1 tracking-widest">공동현관 출입 정보망</p>
           </div>
           <div className="text-[9px] font-bold text-slate-400 bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-800 flex items-center gap-1.5 shadow-inner">
@@ -115,25 +117,27 @@ export default function Page() {
           </div>
         </div>
 
-        {/* 검색창: 초성 안내 문구 투명하게 삽입 */}
+        {/* 검색창: 투명한 초성 안내 문구 삽입 */}
         <div className="px-5 pb-5 relative z-10">
           <div className="relative group flex flex-col justify-center">
-            <Search className="absolute left-4 text-slate-800 group-focus-within:text-yellow-500 transition-colors z-20" size={20} />
+            <Search className="absolute left-4 text-slate-700 group-focus-within:text-yellow-500 transition-colors pointer-events-none z-20" size={20} />
             <input 
               type="text" 
               className="w-full p-4.5 pl-12 bg-[#1e293b] rounded-2xl border border-slate-700/50 focus:border-yellow-500/60 text-lg focus:outline-none shadow-xl transition-all font-bold" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)} 
             />
+            {/* 투명하고 작은 초성 안내 문구 */}
             {!searchTerm && (
               <span className="absolute left-12 text-[13px] text-slate-600 font-bold pointer-events-none opacity-50">
                 건물명 초성 검색 가능 (예: ㄱㄹㄷㅂ)
               </span>
             )}
           </div>
+          
           <div className="flex gap-2 mt-5 overflow-x-auto no-scrollbar pb-1">
             {['전체', '운서', '하늘', '화장실'].map(t => (
-              <button key={t} onClick={() => setActiveTab(t)} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-all text-xs ${activeTab === t ? 'bg-yellow-500 text-black shadow-lg' : 'bg-slate-800/40 text-slate-600 border border-slate-700/30'}`}>
+              <button key={t} onClick={() => setActiveTab(t)} className={`px-5 py-2.5 rounded-xl font-bold whitespace-nowrap transition-all text-xs ${activeTab === t ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'bg-slate-800/40 text-slate-600 border border-slate-700/30'}`}>
                 {t}
               </button>
             ))}
@@ -142,18 +146,18 @@ export default function Page() {
       </div>
 
       {/* 리스트 구역 */}
-      <div className="p-5 space-y-4 relative z-10 min-h-[50px]">
+      <div className="p-5 space-y-4 relative z-10">
         {filtered.map(i => (
           <div key={i.id} className="bg-[#111827] p-5 rounded-[2.5rem] border border-slate-800/40 shadow-inner group transition-all">
             <div className="flex justify-between items-start">
               <div className="flex-1 mr-2">
                 <span className="text-[9px] bg-slate-800 px-2 py-0.5 rounded font-bold text-slate-500 uppercase tracking-widest">{i.region}</span>
-                <h2 className="text-xl font-bold mt-1 text-white tracking-tight break-keep">{i.name}</h2>
+                <h2 className="text-xl font-bold mt-1 text-white leading-snug tracking-tight break-keep">{i.name}</h2>
               </div>
               <div className="flex gap-1.5">
-                <button onClick={() => showHistory(i.id)} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-blue-400 border border-slate-700/20 active:scale-90"><History size={16} /></button>
-                <button onClick={() => {setEditingItem(i); setFormData({ region: i.region, name: i.name, password: i.password, note: i.note }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-700/20 active:scale-90"><Edit2 size={16} /></button>
-                <button onClick={() => {navigator.clipboard.writeText(i.password); alert('복사됨');}} className="bg-yellow-500/10 p-3 rounded-xl text-yellow-500 border border-yellow-500/20 shadow-lg active:scale-90"><Copy size={18} /></button>
+                <button onClick={() => showHistory(i.id)} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-blue-400 border border-slate-700/20 active:scale-90 transition-transform"><History size={16} /></button>
+                <button onClick={() => {setEditingItem(i); setFormData({ region: i.region, name: i.name, password: i.password, note: i.note }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-700/20 active:scale-90 transition-transform"><Edit2 size={16} /></button>
+                <button onClick={() => {navigator.clipboard.writeText(i.password); alert('복사됨');}} className="bg-yellow-500/10 p-3 rounded-xl text-yellow-500 border border-yellow-500/20 shadow-lg active:scale-90 transition-all"><Copy size={18} /></button>
               </div>
             </div>
             <div className="mt-4 pt-4 border-t border-slate-800/40 flex justify-between items-end gap-3 border-t border-slate-800/60">
@@ -162,34 +166,86 @@ export default function Page() {
             </div>
           </div>
         ))}
+        {searchTerm !== '' && filtered.length === 0 && (
+          <p className="text-center py-10 text-slate-600 text-sm font-bold italic">검색 결과가 없습니다.</p>
+        )}
       </div>
 
       {/* 푸터: 낙관 로고와 안전 문구, 만든이 정보 */}
-      <footer className={`flex flex-col items-center text-center px-10 transition-all duration-700 relative z-10 ${isInitialState ? 'mt-24 opacity-100' : 'mt-10 opacity-30 scale-95'}`}>
+      <footer className={`flex flex-col items-center text-center px-6 transition-all duration-700 relative z-10 ${isInitialState ? 'mt-24 opacity-100' : 'mt-10 opacity-30 scale-95'}`}>
         <div className="w-full max-w-sm bg-[#1e293b]/60 backdrop-blur-md p-8 rounded-[3.5rem] border border-slate-800 shadow-2xl flex flex-col items-center gap-5">
           <AnRaMuBokSeal className="w-16 h-16 shadow-2xl shadow-red-900/40" />
+          
           <div className="space-y-2">
-            <p className="text-[11px] text-yellow-500 font-black tracking-[0.2em] uppercase">STAY ALERT, RIDE SAFE</p>
+            <p className="text-[11px] text-yellow-500 font-black tracking-[0.2em] uppercase mb-1">STAY ALERT, RIDE SAFE</p>
             <p className="text-[15px] text-white font-black leading-snug tracking-tight break-keep">
               오늘도 영종도의 모든 길 위에서<br />
               <span className="text-yellow-500 font-black">안라무복</span>하시길 기원합니다.
             </p>
           </div>
+
           <div className="w-12 h-px bg-slate-800 mx-auto opacity-50 my-1"></div>
-          <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group transition-all">
+
+          {/* 만든이 가독성 확보 */}
+          <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group">
             <p className="text-[12px] text-white font-bold tracking-tight">
-              만든이 : <span className="text-yellow-400 font-black ml-1 uppercase group-hover:text-white">부업맨 HoJun</span>
+              만든이 : <span className="text-yellow-400 font-black ml-1 uppercase group-hover:text-white transition-colors">부업맨 HoJun</span>
             </p>
           </div>
         </div>
       </footer>
 
       {/* 플로팅 버튼 */}
-      <button onClick={() => {setEditingItem(null); setFormData({ region: '운서', name: '', password: '', note: '' }); setIsModalOpen(true);}} className="fixed bottom-10 right-8 bg-yellow-500 text-black p-5 rounded-2xl shadow-2xl z-50 active:scale-90 transition-all">
+      <button onClick={() => {setEditingItem(null); setFormData({ region: '운서', name: '', password: '', note: '' }); setIsModalOpen(true);}} className="fixed bottom-10 right-8 bg-yellow-500 text-black p-5 rounded-2xl shadow-2xl shadow-yellow-500/40 z-50 active:scale-90 transition-all hover:scale-105 animate-pulse">
         <Plus size={30} strokeWidth={3} />
       </button>
 
-      {/* 히스토리/등록 모달 생략 (이전 코드와 동일하게 유지하세요) */}
+      {/* 히스토리 모달 */}
+      {historyModal.open && (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[200] flex items-center justify-center p-6 text-sm">
+          <div className="bg-[#1e293b] w-full max-w-md rounded-[2.5rem] p-8 border border-slate-700/40 shadow-3xl break-keep">
+            <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4 text-white font-black uppercase tracking-tighter">
+              <h3 className="flex items-center gap-2"><History size={18}/> History Logs</h3>
+              <button onClick={() => setHistoryModal({ ...historyModal, open: false })} className="bg-slate-800 p-2 rounded-xl text-white"><X size={18}/></button>
+            </div>
+            <div className="space-y-3 max-h-[50vh] overflow-y-auto no-scrollbar">
+              {historyModal.logs.map((log, idx) => (
+                <div key={idx} className="bg-[#070b14] p-5 rounded-3xl border border-slate-800 flex justify-between items-center group shadow-inner">
+                  <div className="flex-1">
+                    <p className="text-[9px] text-slate-700 mb-1 font-bold">{new Date(log.created_at).toLocaleString()}</p>
+                    <p className="text-yellow-500 font-mono font-bold text-xl">{log.old_password}</p>
+                    <p className="text-[11px] text-slate-600 mt-1 font-medium">{log.old_name}</p>
+                  </div>
+                  <button onClick={() => rollback(log)} className="bg-blue-500/10 text-blue-400 p-3.5 rounded-2xl active:scale-90 transition-all border border-blue-500/10"><RotateCcw size={18}/></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 등록/수정 모달 */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-sm">
+          <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl break-keep">
+            <h3 className="text-2xl font-black text-yellow-400 mb-8 tracking-tighter uppercase break-keep">{editingItem ? 'Edit Info' : 'New Entry'}</h3>
+            <div className="space-y-5">
+              <div className="grid grid-cols-3 gap-2">
+                {['운서', '하늘', '화장실'].map(r => (
+                  <button key={r} onClick={() => setFormData({...formData, region: r})} className={`py-3 rounded-2xl font-bold border transition-all ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg' : 'bg-slate-900/50 border-slate-800 text-slate-600 bg-slate-800/50'}`}>{r}</button>
+                ))}
+              </div>
+              <input type="text" placeholder="건물 명칭" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold shadow-inner placeholder:text-slate-800" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+              <input type="text" placeholder="현관 비밀번호" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-yellow-400 font-mono text-xl outline-none focus:border-yellow-500 shadow-inner placeholder:text-slate-800" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+              <textarea placeholder="특이사항" className="w-full p-4.5 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none h-28 shadow-inner placeholder:text-slate-800" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
+              <div className="flex gap-2">
+                <button onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-800 p-5 rounded-2xl font-bold active:scale-95 transition-all text-white border border-slate-700/50 hover:bg-slate-700">Cancel</button>
+                <button onClick={handleSave} className="flex-[2] bg-yellow-500 text-black p-5 rounded-2xl font-black text-xl shadow-xl shadow-yellow-500/10 active:scale-95 transition-all hover:bg-yellow-400">Submit</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
