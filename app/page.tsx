@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Search, Copy, Plus, Edit2, X, Save, MapPin, History, RotateCcw, BarChart3, Download, Upload, Calendar as CalendarIcon, ShieldCheck, ChevronLeft, ChevronRight, ExternalLink, Trash2, UserCheck, Bath } from 'lucide-react';
+import { Search, Copy, Plus, Edit2, MapPin, History, RotateCcw, BarChart3, Download, Upload, Calendar as CalendarIcon, ShieldCheck, ChevronLeft, ChevronRight, ExternalLink, Trash2, UserCheck, Bath, AlertTriangle } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -20,7 +20,6 @@ const getChosung = (str: string) => {
   return result;
 };
 
-// [잠금] 로고 및 낙관
 const DeliveryScooterLogo = ({ className = "" }) => (
   <img src="/logo.png" alt="로고" className={`${className} object-contain`} />
 );
@@ -40,6 +39,7 @@ export default function Page() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   
+  // 통계 및 로그 상태
   const [stats, setStats] = useState({ visits: 0, todayVisits: 0, logs: [] as any[], visitLogs: [] as any[] });
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [formData, setFormData] = useState({ region: '', name: '', password: '', note: '', address: '', b_type: '' });
@@ -47,7 +47,7 @@ export default function Page() {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const fetchData = async () => {
-    const { data: b } = await supabase.from('buildings').select('*').order('id', { ascending: true });
+    const { data: b } = await supabase.from('buildings').select('*').order('updated_at', { ascending: false });
     if (b) setData(b);
     const { count: total } = await supabase.from('site_visits').select('*', { count: 'exact', head: true });
     const todayStr = new Date().toISOString().split('T')[0];
@@ -57,7 +57,7 @@ export default function Page() {
 
   const fetchStats = async () => {
     const { data: logs } = await supabase.from('building_logs').select('*').order('created_at', { ascending: false });
-    const { data: visits } = await supabase.from('site_visits').select('*', { count: 'exact' });
+    const { data: visits } = await supabase.from('site_visits').select('*').order('created_at', { ascending: false });
     setStats(prev => ({ ...prev, logs: logs || [], visitLogs: visits || [] }));
   };
 
@@ -86,7 +86,19 @@ export default function Page() {
 
   const handleSave = async () => {
     if (!formData.name || !formData.password) return alert('필수 내용을 입력하세요.');
-    const logData = { building_id: editingItem?.id, old_name: editingItem?.name, old_password: editingItem?.password, old_note: editingItem?.note, old_address: editingItem?.address, old_b_type: editingItem?.b_type, old_region: editingItem?.region, ip };
+    
+    // [핵심] 수정 전 데이터를 로그에 상세 기록
+    const logData = { 
+      building_id: editingItem?.id, 
+      old_name: editingItem?.name, 
+      old_password: editingItem?.password, 
+      old_note: editingItem?.note, 
+      old_address: editingItem?.address, 
+      old_b_type: editingItem?.b_type, 
+      old_region: editingItem?.region, 
+      ip 
+    };
+
     if (editingItem) {
       await supabase.from('building_logs').insert([logData]);
       await supabase.from('buildings').update({ ...formData, updated_at: new Date() }).eq('id', editingItem.id);
@@ -95,14 +107,19 @@ export default function Page() {
     }
     setIsModalOpen(false);
     fetchData();
+    if(adminMode) fetchStats();
   };
 
   const handleDelete = async () => {
     if (!editingItem) return;
-    if (confirm(`'${editingItem.name}' 데이터를 영구 삭제하시겠습니까?`)) {
+    if (confirm(`'${editingItem.name}' 데이터를 영구 삭제하시겠습니까? (이 기록은 관리자 모드 로그에 보존됩니다)`)) {
+      // 삭제 전 로그 남기기
+      const logData = { building_id: editingItem.id, old_name: `[삭제됨] ${editingItem.name}`, old_password: editingItem.password, old_note: editingItem.note, old_address: editingItem.address, old_b_type: editingItem.b_type, old_region: editingItem.region, ip };
+      await supabase.from('building_logs').insert([logData]);
       await supabase.from('buildings').delete().eq('id', editingItem.id);
       setIsModalOpen(false);
       fetchData();
+      if(adminMode) fetchStats();
     }
   };
 
@@ -125,10 +142,10 @@ export default function Page() {
   const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-white font-sans tracking-tight pb-40 relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#070b14] text-white font-sans tracking-tight pb-40 relative overflow-x-hidden text-sm">
       <div className="fixed inset-0 bg-[url('https://images.unsplash.com/photo-1558981285-6f0c94958bb6?q=80&w=1000&auto=format')] bg-cover bg-center opacity-[0.04] grayscale pointer-events-none z-0"></div>
 
-      {/* 헤더 [잠금: Access Point Info / 방문자 통계] */}
+      {/* 헤더 [잠금: Access Point Info / 오늘 방문자] */}
       <div className="bg-[#0f172a]/95 border-b border-slate-800/60 sticky top-0 z-40 backdrop-blur-lg shadow-2xl">
         <div className="p-3.5 flex items-center justify-between gap-2 relative z-10">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -139,7 +156,7 @@ export default function Page() {
               <span className="text-[9px] text-slate-500 font-bold tracking-tighter truncate font-mono uppercase">Access Point Info</span>
             </div>
           </div>
-          <button onClick={handleAdminAuth} className="flex items-center gap-2 bg-slate-900 px-2.5 py-1.5 rounded-xl border border-slate-800 shadow-inner active:scale-95 transition-all">
+          <button onClick={handleAdminAuth} className="flex items-center gap-2 bg-slate-900 px-2.5 py-1.5 rounded-xl border border-slate-800 shadow-inner">
             <div className="flex flex-col items-end leading-none">
               <span className="text-[7px] text-slate-500 font-bold uppercase mb-0.5">Today</span>
               <span className="text-[10px] font-black text-yellow-500">{stats.todayVisits}</span>
@@ -159,11 +176,11 @@ export default function Page() {
               <Search className="absolute left-4 text-slate-800 group-focus-within:text-yellow-500 transition-colors z-20" size={18} />
               <input 
                 type="text" 
-                className="w-full p-4 pl-11 bg-[#1e293b] rounded-2xl border border-slate-700/50 focus:border-yellow-500/60 text-lg focus:outline-none shadow-xl transition-all font-bold" 
+                className="w-full p-4 pl-11 bg-[#1e293b] rounded-2xl border border-slate-700/50 focus:border-yellow-500/60 text-lg focus:outline-none shadow-xl transition-all font-bold placeholder:text-slate-700" 
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); if (activeTab === 'Home') setActiveTab('전체'); }} 
+                placeholder={searchTerm ? "" : "건물명 초성 검색 가능 (예: ㄱㄹㄷㅂ)"}
               />
-              {!searchTerm && <span className="absolute left-11 text-[12px] text-slate-700 font-bold pointer-events-none opacity-50">건물명 초성 검색 가능 (예: ㄱㄹㄷㅂ)</span>}
             </div>
             <div className="flex gap-1.5 mt-4 overflow-x-auto no-scrollbar pb-1">
               {['운서', '하늘', '운남', '화장실', '최근변경', '전체'].map(t => (
@@ -174,41 +191,37 @@ export default function Page() {
         )}
       </div>
 
-      {/* 리스트 구역 [수정: 화장실 구분감 강화] */}
+      {/* 리스트 구역 [잠금] */}
       {!adminMode && (
         <div className="p-5 space-y-5 relative z-10 min-h-[50px]">
           {filtered.map(i => {
             const isToilet = i.region === '화장실';
-            const themeColor = isToilet ? 'text-cyan-400' : 'text-yellow-400';
-            const bgColor = isToilet ? 'bg-cyan-500/10' : 'bg-yellow-500/10';
-            const borderColor = isToilet ? 'border-cyan-500/20' : 'border-yellow-500/20';
-
             return (
               <div key={i.id} className={`bg-[#111827]/90 p-5 rounded-[2.5rem] border ${isToilet ? 'border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.1)]' : 'border-slate-800/60 shadow-2xl'} transition-all`}>
                 <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1 mr-4">
+                  <div className="flex-1 mr-4 min-w-0">
                     <div className="flex items-center gap-1.5 mb-2">
-                      <span className={`text-[8px] ${isToilet ? 'bg-cyan-900/50 text-cyan-400' : 'bg-slate-800 text-slate-500'} px-2 py-0.5 rounded-lg font-black uppercase tracking-widest`}>{i.region}</span>
-                      {i.b_type && <span className={`text-[8px] ${bgColor} px-2 py-0.5 rounded-lg font-black ${themeColor} uppercase tracking-widest border ${borderColor}`}>{i.b_type}</span>}
+                      <span className={`text-[8px] ${isToilet ? 'bg-cyan-900/50 text-cyan-400' : 'bg-slate-800 text-slate-500'} px-2 py-0.5 rounded-lg font-black uppercase tracking-widest`}>{i.region || '미분류'}</span>
+                      {i.b_type && <span className={`text-[8px] bg-yellow-500/10 px-2 py-0.5 rounded-lg font-black text-yellow-500 uppercase tracking-widest border border-yellow-500/20`}>{i.b_type}</span>}
                     </div>
                     <div className="flex items-center gap-2">
-                      {isToilet && <Bath size={20} className="text-cyan-400 shrink-0" />}
-                      <h2 className={`text-xl font-black ${isToilet ? 'text-cyan-100' : 'text-white'} tracking-tighter break-keep leading-tight`}>{i.name}</h2>
+                      {isToilet && <Bath size={18} className="text-cyan-400 shrink-0" />}
+                      <h2 className={`text-xl font-black ${isToilet ? 'text-cyan-100' : 'text-white'} tracking-tighter truncate leading-tight`}>{i.name}</h2>
                     </div>
                     {i.address && (
-                      <button onClick={() => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(i.address)}`, '_blank')} className="flex items-center gap-1 mt-1 text-blue-400 text-[10px] font-bold opacity-70">
+                      <button onClick={() => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(i.address)}`, '_blank')} className="flex items-center gap-1 mt-1 text-blue-400 text-[10px] font-bold opacity-70 hover:opacity-100 transition-opacity">
                         <MapPin size={10} /> {i.address} <ExternalLink size={10} />
                       </button>
                     )}
                   </div>
                   <div className="flex gap-1.5 shrink-0">
-                    <button onClick={() => {setEditingItem(i); setFormData({ region: i.region || '', name: i.name, password: i.password, note: i.note, address: i.address || '', b_type: i.b_type || '' }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-800/50 active:scale-90"><Edit2 size={16} /></button>
+                    <button onClick={() => {setEditingItem(i); setFormData({ region: i.region || '', name: i.name, password: i.password, note: i.note, address: i.address || '', b_type: i.b_type || '' }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-800/50 active:scale-90 transition-all"><Edit2 size={16} /></button>
                     <button onClick={() => {navigator.clipboard.writeText(i.password); alert('복사됨');}} className={`${isToilet ? 'bg-cyan-500' : 'bg-yellow-500'} p-2.5 rounded-xl text-black shadow-lg active:scale-90 transition-all`}><Copy size={18} /></button>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <div className={`bg-black/40 border ${isToilet ? 'border-cyan-500/20' : 'border-slate-800/40'} p-4 rounded-3xl flex items-center justify-center`}>
-                     <span className={`text-4xl font-mono font-black ${themeColor} tracking-tighter drop-shadow-md`}>{i.password}</span>
+                     <span className={`text-4xl font-mono font-black ${isToilet ? 'text-cyan-400' : 'text-yellow-400'} tracking-tighter drop-shadow-md`}>{i.password}</span>
                   </div>
                   {i.note && <p className="text-[12px] text-slate-400 font-medium leading-relaxed px-1 break-keep"><span className={`${isToilet ? 'text-cyan-600' : 'text-slate-600'} font-black mr-2 uppercase`}>Note:</span> {i.note}</p>}
                 </div>
@@ -218,16 +231,18 @@ export default function Page() {
         </div>
       )}
 
-      {/* [잠금] 관리자 모드: 캘린더, 통계, 롤백 유지 */}
+      {/* [수정] 관리자 모드: 캘린더 기반 세부 항목별 롤백 엔진 */}
       {adminMode && (
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-black text-yellow-400 uppercase tracking-tighter flex items-center gap-2"><ShieldCheck /> Admin Dashboard</h2>
-            <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-4 py-2 rounded-xl font-bold border border-red-900/30">Exit</button>
+            <h2 className="text-2xl font-black text-yellow-400 uppercase tracking-tighter flex items-center gap-2"><ShieldCheck /> 관리자 모드</h2>
+            <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-4 py-2 rounded-xl font-bold border border-red-900/30">종료</button>
           </div>
-          <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl mb-4">
+
+          {/* 1. 캘린더: 날짜별 활동 요약 */}
+          <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><CalendarIcon size={16}/> Daily Activity</h3>
+              <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><CalendarIcon size={16}/> 활동 달력</h3>
               <div className="flex items-center gap-4 bg-black/40 px-3 py-1.5 rounded-xl border border-slate-800">
                 <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}><ChevronLeft size={16}/></button>
                 <span className="text-xs font-black text-yellow-400 font-mono">{currentDate.getFullYear()}. {currentDate.getMonth() + 1}</span>
@@ -239,40 +254,68 @@ export default function Page() {
               {Array.from({length: getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth())}).map((_, i) => {
                 const day = i + 1;
                 const dStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const hasActivity = stats.logs.some(l => l.created_at.startsWith(dStr)) || stats.visitLogs.some(v => v.created_at.startsWith(dStr));
+                const hasEdit = stats.logs.some(l => l.created_at.startsWith(dStr));
+                const hasVisit = stats.visitLogs.some(v => v.created_at.startsWith(dStr));
                 const isSelected = selectedDate === dStr;
                 return (
-                  <button key={day} onClick={() => setSelectedDate(dStr)} className={`aspect-square rounded-xl border flex flex-col items-center justify-center transition-all ${isSelected ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg scale-110 z-10' : hasActivity ? 'bg-yellow-500/10 border-yellow-500/30 text-white' : 'bg-slate-900/30 border-slate-800 text-slate-600'}`}>
+                  <button key={day} onClick={() => setSelectedDate(dStr)} className={`aspect-square rounded-xl border flex flex-col items-center justify-center transition-all ${isSelected ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg scale-110 z-10' : hasEdit ? 'bg-red-500/20 border-red-500/40 text-white' : hasVisit ? 'bg-blue-500/10 border-blue-500/20 text-slate-400' : 'bg-slate-900/30 border-slate-800 text-slate-600 opacity-40'}`}>
                     <span className="text-[11px] font-black">{day}</span>
-                    {hasActivity && !isSelected && <div className="w-1 h-1 bg-yellow-500 rounded-full mt-0.5"></div>}
+                    {hasEdit && !isSelected && <div className="w-1 h-1 bg-red-500 rounded-full mt-0.5 animate-pulse"></div>}
                   </button>
                 );
               })}
             </div>
           </div>
+
+          {/* 2. 상세 항목별 롤백 섹션 */}
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-4">
-            <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><History size={16}/> Logs for {selectedDate}</h3>
-            <div className="space-y-3 max-h-96 overflow-y-auto no-scrollbar">
-              {stats.visitLogs.filter(v => v.created_at.startsWith(selectedDate)).map((v, i) => (
-                <div key={`v-${i}`} className="bg-blue-500/5 p-3 rounded-2xl border border-blue-500/10 flex items-center gap-3">
-                  <UserCheck size={14} className="text-blue-400" />
-                  <p className="text-[10px] text-blue-300 font-bold uppercase tracking-tighter">Visitor Connected <span className="text-slate-600 ml-2">({v.ip})</span></p>
-                </div>
-              ))}
+            <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><History size={16}/> {selectedDate} 수정 이력 (정밀 복구)</h3>
+            <div className="space-y-4 max-h-96 overflow-y-auto no-scrollbar">
+              {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).length === 0 && (
+                <div className="text-center py-10 opacity-30 italic font-bold">이 날짜에는 수정 이력이 없습니다.</div>
+              )}
+              
               {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).map((log, idx) => (
-                <div key={`l-${idx}`} className="bg-black/40 p-4 rounded-2xl border border-slate-800 border-l-4 border-l-red-600/50 space-y-3">
+                <div key={`l-${idx}`} className="bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 border-l-red-500/50 space-y-3 shadow-inner">
                   <div className="flex justify-between items-start">
-                    <div><p className="text-[10px] text-slate-500 font-bold mb-1">{new Date(log.created_at).toLocaleTimeString()} • IP: {log.ip}</p><p className="text-sm font-black text-white">{log.old_name}</p></div>
-                    <button onClick={async () => {
-                      if(confirm(`[${log.old_name}] 정보를 완벽 복구할까요?`)) {
-                        await supabase.from('buildings').update({ name: log.old_name, password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region }).eq('id', log.building_id);
-                        fetchData(); fetchStats();
-                      }
-                    }} className="bg-red-600 text-white p-2 rounded-xl active:scale-95"><RotateCcw size={16}/></button>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] text-slate-500 font-bold mb-1 flex items-center gap-2">
+                        <AlertTriangle size={10} className="text-red-500" /> {new Date(log.created_at).toLocaleTimeString()} • IP: {log.ip}
+                      </p>
+                      <h4 className="text-sm font-black text-white truncate">{log.old_name}</h4>
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        if(confirm(`[${log.old_name}]의 데이터를 이 시점으로 되돌릴까요?\n수정 전의 모든 항목(비번, 주소 등)이 복구됩니다.`)) {
+                          // [중요] Upsert를 사용하여 삭제된 항목도 다시 생성 가능하게 처리
+                          const { error } = await supabase.from('buildings').upsert({ 
+                            id: log.building_id,
+                            name: log.old_name.replace('[삭제됨] ', ''), 
+                            password: log.old_password, 
+                            note: log.old_note, 
+                            address: log.old_address, 
+                            b_type: log.old_b_type, 
+                            region: log.old_region,
+                            updated_at: new Date()
+                          });
+                          if(error) alert('복구 실패: ' + error.message);
+                          else { alert('항목별 정밀 복구 완료!'); fetchData(); fetchStats(); }
+                        }
+                      }}
+                      className="bg-red-600 hover:bg-red-500 text-white p-2.5 rounded-2xl active:scale-95 shadow-lg shadow-red-900/30 transition-all shrink-0 ml-2"
+                    >
+                      <RotateCcw size={16}/>
+                    </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 font-mono text-[9px]">
-                    <div className="bg-slate-900/50 p-2 rounded-lg"><p className="text-slate-600 mb-1 font-black uppercase">Prev Password</p><p className="text-yellow-600 line-through">{log.old_password}</p></div>
-                    <div className="bg-slate-900/50 p-2 rounded-lg"><p className="text-slate-600 mb-1 font-black uppercase">Prev Region</p><p className="text-blue-400">{log.old_region || 'N/A'}</p></div>
+                  
+                  <div className="grid grid-cols-2 gap-2 font-mono text-[9px] bg-slate-900/50 p-3 rounded-2xl border border-white/5">
+                    <div className="col-span-2 flex justify-between border-b border-white/5 pb-1 mb-1">
+                      <span className="text-slate-600 font-black">수정 전 데이터</span>
+                      <span className="text-red-500/80 font-bold">Restore Available</span>
+                    </div>
+                    <div><p className="text-slate-600 mb-0.5 uppercase">Password</p><p className="text-yellow-600 font-bold">{log.old_password}</p></div>
+                    <div><p className="text-slate-600 mb-0.5 uppercase">Type</p><p className="text-blue-400">{log.old_b_type || 'N/A'}</p></div>
+                    <div className="col-span-2 mt-1"><p className="text-slate-600 mb-0.5 uppercase">Address</p><p className="text-slate-400 truncate">{log.old_address || 'No Address'}</p></div>
                   </div>
                 </div>
               ))}
@@ -281,7 +324,7 @@ export default function Page() {
         </div>
       )}
 
-      {/* 푸터 [잠금] */}
+      {/* 푸터 [잠금: 안라무복 낙관 / 만든이] */}
       <footer className={`flex flex-col items-center text-center px-6 transition-all duration-700 relative z-10 ${isInitialState ? 'mt-24 opacity-100' : 'mt-10 opacity-30 scale-95'}`}>
         <div className="w-full max-w-sm bg-[#1e293b]/60 backdrop-blur-md p-8 rounded-[3.5rem] border border-slate-800 shadow-2xl flex flex-col items-center gap-5">
           <AnRaMuBokSeal className="w-16 h-16 shadow-2xl shadow-red-900/40" />
@@ -296,7 +339,7 @@ export default function Page() {
         </div>
       </footer>
 
-      {/* 모달 [잠금] */}
+      {/* 입력/수정 모달 [잠금: 삭제 버튼 유지] */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-sm">
           <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl break-keep relative">
@@ -310,7 +353,7 @@ export default function Page() {
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {['아파트', '오피스텔', '빌라'].map(t => (
-                  <button key={t} onClick={() => setFormData({...formData, b_type: formData.b_type === t ? '' : t})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.b_type === t ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{t}</button>
+                  <button key={t} onClick={() => setFormData({...formData, b_type: formData.b_type === t ? '' : t})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.b_type === t ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{t}</button>
                 ))}
               </div>
               <input type="text" placeholder="건물 명칭 (필수)" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold placeholder:text-slate-800 shadow-inner" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
@@ -318,14 +361,15 @@ export default function Page() {
               <input type="text" placeholder="네이버 연동 주소" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-blue-400 text-xs outline-none focus:border-blue-500 placeholder:text-slate-800 shadow-inner" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
               <textarea placeholder="특이사항" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none h-20 placeholder:text-slate-800 shadow-inner" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
               <div className="flex gap-2.5 mt-2">
-                <button onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-800 p-5 rounded-2xl font-bold text-white border border-slate-700/50 active:scale-95 transition-all">Cancel</button>
-                <button onClick={handleSave} className="flex-[2] bg-yellow-500 text-black p-5 rounded-2xl font-black text-xl shadow-xl shadow-yellow-500/10 active:scale-95 transition-all">Submit</button>
+                <button onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-800 p-5 rounded-2xl font-bold text-white border border-slate-700/50 active:scale-95 transition-all">취소</button>
+                <button onClick={handleSave} className="flex-[2] bg-yellow-500 text-black p-5 rounded-2xl font-black text-xl shadow-xl shadow-yellow-500/10 active:scale-95 transition-all">저장하기</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* 플로팅 버튼 [잠금] */}
       {!adminMode && (
         <button onClick={() => {setEditingItem(null); setFormData({ region: '', name: '', password: '', note: '', address: '', b_type: '' }); setIsModalOpen(true);}} className="fixed bottom-10 right-8 bg-yellow-500 text-black p-5 rounded-2xl shadow-2xl z-50 active:scale-90 transition-all animate-pulse">
           <Plus size={30} strokeWidth={3} />
