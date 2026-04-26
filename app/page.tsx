@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
-// [잠금] 한글 초성 검색 엔진
+// [잠금] 초성 검색 엔진
 const getChosung = (str: string) => {
   const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
   let result = "";
@@ -31,6 +31,22 @@ const AnRaMuBokSeal = ({ className = "" }) => (
   </svg>
 );
 
+// [신규] 전형적인 한국 남녀 화장실 픽토그램 (🚻 스타일)
+const KoreanRestroomPictogram = ({ className = "", size = 20 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size} className={className} fill="currentColor">
+    {/* 중앙 분리선 */}
+    <rect x="49" y="10" width="2" height="80" rx="1" opacity="0.3" />
+    
+    {/* 남자 실루엣 */}
+    <circle cx="28" cy="22" r="10"/>
+    <path d="M28 36H16c-3.3 0-6 2.7-6 6v22h8v24c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4V64h4v24c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4V64h8V42c0-3.3-2.7-6-6-6Z"/>
+    
+    {/* 여자 실루엣 (A라인 치마 스타일) */}
+    <circle cx="72" cy="22" r="10"/>
+    <path d="M72 36H60c-3.3 0-6 2.7-6 6v18c0 1.7.7 3.2 1.8 4.3l8 8v16c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4V72.3l8-8c1.1-1.1 1.8-2.6 1.8-4.3V42c0-3.3-2.7-6-6-6Z"/>
+  </svg>
+);
+
 export default function Page() {
   const [data, setData] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,7 +57,7 @@ export default function Page() {
   const [stats, setStats] = useState({ visits: 0, todayVisits: 0, logs: [] as any[] });
   const [ip, setIp] = useState('');
 
-  // 한국 시간 기준 날짜 문자열
+  // 한국 시간 기준 날짜 문자열 계산 (YYYY-MM-DD)
   const getKSTDateString = () => {
     const now = new Date();
     return new Date(now.getTime() + (9 * 60 * 60 * 1000)).toISOString().split('T')[0];
@@ -52,14 +68,16 @@ export default function Page() {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const fetchData = async () => {
+    // 1. 건물 데이터 로드
     const { data: b } = await supabase.from('buildings').select('*').order('updated_at', { ascending: false });
     if (b) setData(b);
     
-    // 방문자 통계 로드
+    // 2. 방문자 통계 로드 (오늘 기준 강제 동기화)
+    const todayStr = getKSTDateString();
     const { count: totalCount } = await supabase.from('site_visits').select('*', { count: 'exact', head: true });
     const { count: todayCount } = await supabase.from('site_visits')
       .select('*', { count: 'exact', head: true })
-      .gte('created_at', `${getKSTDateString()}T00:00:00Z`);
+      .gte('created_at', `${todayStr}T00:00:00Z`);
     
     setStats(prev => ({ ...prev, visits: totalCount || 0, todayVisits: todayCount || 0 }));
   };
@@ -75,9 +93,13 @@ export default function Page() {
       setIp(resData.ip);
       const visitKey = `v_${getKSTDateString()}`;
       if (!sessionStorage.getItem(visitKey)) {
-        supabase.from('site_visits').insert([{ ip: resData.ip }]).then(() => {
-          sessionStorage.setItem(visitKey, '1');
-          fetchData();
+        supabase.from('site_visits').insert([{ ip: resData.ip }]).then(({error}) => {
+          if(!error) {
+            sessionStorage.setItem(visitKey, '1');
+            fetchData();
+          } else {
+            console.error("방문 기록 실패:", error.message);
+          }
         });
       }
     });
@@ -115,12 +137,11 @@ export default function Page() {
       }
     }
     setIsModalOpen(false); fetchData(); if(adminMode) fetchStats();
-    alert("저장되었습니다.");
   };
 
   const handleDelete = async () => {
     if (!editingItem) return;
-    if (confirm(`'${editingItem.name}' 데이터를 삭제하시겠습니까?`)) {
+    if (confirm(`'${editingItem.name}' 데이터를 삭제하시겠습니까? (로그에 보존됨)`)) {
       const logEntry = { building_id: editingItem.id, old_name: `[삭제됨] ${editingItem.name}`, old_password: editingItem.password, old_note: editingItem.note, old_address: editingItem.address, old_b_type: editingItem.b_type, old_region: editingItem.region, event_type: 'DELETE', ip };
       await supabase.from('building_logs').insert([logEntry]);
       await supabase.from('buildings').delete().eq('id', editingItem.id);
@@ -146,7 +167,7 @@ export default function Page() {
     <div className="min-h-screen bg-[#070b14] text-white font-sans tracking-tight pb-40 relative overflow-x-hidden text-sm">
       <div className="fixed inset-0 bg-[url('https://images.unsplash.com/photo-1558981285-6f0c94958bb6?q=80&w=1000&auto=format')] bg-cover bg-center opacity-[0.04] grayscale pointer-events-none z-0"></div>
 
-      {/* 헤더 [잠금: 오늘 방문자 통계 고정] */}
+      {/* 헤더 [잠금] */}
       <div className="bg-[#0f172a]/95 border-b border-slate-800/60 sticky top-0 z-40 backdrop-blur-lg shadow-2xl">
         <div className="p-3.5 flex items-center justify-between gap-2 relative z-10">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -184,14 +205,14 @@ export default function Page() {
             </div>
             <div className="flex gap-1.5 mt-4 overflow-x-auto no-scrollbar pb-1">
               {['운서', '하늘', '운남', '화장실', '최근변경', '전체'].map(t => (
-                <button key={t} onClick={() => setActiveTab(activeTab === t ? 'Home' : t)} className={`px-3.5 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-[11px] ${activeTab === t ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'bg-slate-800/40 text-slate-500 border border-slate-700/30'}`}>{t}</button>
+                <button key={t} onClick={() => setActiveTab(activeTab === t ? 'Home' : t)} className={`px-3.5 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-[11px] ${activeTab === t ? 'bg-yellow-500 text-black shadow-lg' : 'bg-slate-800/40 text-slate-500 border border-slate-700/30'}`}>{t}</button>
               ))}
             </div>
           </div>
         )}
       </div>
 
-      {/* 리스트 구역 [핵심수정: 주소 및 지도 버튼 완벽 복구] */}
+      {/* 리스트 구역 [핵심수정: 화장실 아이콘 변경] */}
       {!adminMode && (
         <div className="p-5 space-y-5 relative z-10 min-h-[50px]">
           {filtered.map(i => {
@@ -205,10 +226,12 @@ export default function Page() {
                       {i.b_type && <span className={`text-[8px] bg-yellow-500/10 px-2 py-0.5 rounded-lg font-black text-yellow-500 uppercase border border-yellow-500/20`}>{i.b_type}</span>}
                     </div>
                     <div className="flex items-start gap-2">
-                      {isToilet && <Bath size={18} className="text-cyan-400 shrink-0 mt-0.5" />}
+                      {/* [복구/수정] 화장실 테마일 때 전형적인 남녀 아이콘 표시 */}
+                      {isToilet ? (
+                        <KoreanRestroomPictogram size={22} className="text-cyan-400 shrink-0 mt-0.5" />
+                      ) : null}
                       <h2 className={`text-xl font-black ${isToilet ? 'text-cyan-100' : 'text-white'} tracking-tighter break-keep leading-tight`}>{i.name}</h2>
                     </div>
-                    {/* [복구] 주소 및 네이버 지도 링크 */}
                     {i.address && (
                       <button onClick={() => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(i.address)}`, '_blank')} className="flex items-center gap-1 mt-1.5 text-blue-400 text-[10px] font-bold opacity-70 hover:opacity-100 transition-opacity">
                         <MapPin size={10} /> {i.address} <ExternalLink size={10} />
@@ -224,7 +247,7 @@ export default function Page() {
                   <div className={`bg-black/40 border ${isToilet ? 'border-cyan-500/20' : 'border-slate-800/40'} p-4 rounded-3xl flex items-center justify-center`}>
                      <span className={`text-4xl font-mono font-black ${isToilet ? 'text-cyan-400' : 'text-yellow-400'} tracking-tighter drop-shadow-md`}>{i.password}</span>
                   </div>
-                  {/* [고정] 특이사항 필드 유지 */}
+                  {/* [잠금] 특이사항 필드 (Note) */}
                   {i.note && <p className="text-[12px] text-slate-400 font-medium px-1 break-keep leading-snug"><span className={`${isToilet ? 'text-cyan-600' : 'text-slate-600'} font-black mr-2 uppercase`}>Note:</span> {i.note}</p>}
                 </div>
               </div>
@@ -233,17 +256,17 @@ export default function Page() {
         </div>
       )}
 
-      {/* 관리자 모드 [잠금: 롤백 기능 고정] */}
+      {/* 관리자 모드 [잠금: 롤백 기능] */}
       {adminMode && (
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-black text-yellow-400 uppercase tracking-tighter flex items-center gap-2"><ShieldCheck /> Admin</h2>
             <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-4 py-2 rounded-xl font-bold border border-red-900/30">Exit</button>
           </div>
+          {/* 달력 UI 유지 */}
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl">
-             {/* 캘린더 UI */}
             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><CalendarIcon size={16}/> Activity Calendar</h3>
+              <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><CalendarIcon size={16}/> Daily Activity</h3>
               <div className="flex items-center gap-4 bg-black/40 px-3 py-1.5 rounded-xl border border-slate-800">
                 <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}><ChevronLeft size={16}/></button>
                 <span className="text-xs font-black text-yellow-400 font-mono">{currentDate.getFullYear()}. {currentDate.getMonth() + 1}</span>
@@ -265,27 +288,32 @@ export default function Page() {
               })}
             </div>
           </div>
+          {/* 로그 UI 유지 */}
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-4">
             <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><History size={16}/> Logs for {selectedDate}</h3>
             <div className="space-y-4 max-h-96 overflow-y-auto no-scrollbar">
-              {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).map((log, idx) => (
-                <div key={`l-${idx}`} className={`bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 ${log.event_type === 'ADD' ? 'border-l-green-500' : log.event_type === 'DELETE' ? 'border-l-red-500' : 'border-l-blue-500'} space-y-3`}>
-                  <div className="flex justify-between items-start">
-                    <div className="min-w-0 flex-1 text-xs">
-                      <p className="text-slate-500 font-bold mb-1 flex items-center gap-1"><Clock size={10} /> {new Date(log.created_at).toLocaleTimeString()} • {log.ip}</p>
-                      <h4 className="font-black text-white truncate"><span className="text-[9px] px-1 bg-slate-800 rounded mr-1">{log.event_type}</span>{log.old_name}</h4>
+              {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).length === 0 ? (
+                <div className="text-center py-10 opacity-30 italic font-bold">No activity.</div>
+              ) : (
+                stats.logs.filter(l => l.created_at.startsWith(selectedDate)).map((log, idx) => (
+                  <div key={`l-${idx}`} className={`bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 ${log.event_type === 'ADD' ? 'border-l-green-500' : log.event_type === 'DELETE' ? 'border-l-red-500' : 'border-l-blue-500'} space-y-3 shadow-inner`}>
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0 flex-1 text-xs">
+                        <p className="text-slate-500 font-bold mb-1 flex items-center gap-1"><Clock size={10} /> {new Date(log.created_at).toLocaleTimeString()} • {log.ip}</p>
+                        <h4 className="font-black text-white truncate"><span className="text-[9px] px-1 bg-slate-800 rounded mr-1">{log.event_type}</span>{log.old_name}</h4>
+                      </div>
+                      {log.event_type !== 'ADD' && (
+                        <button onClick={async () => {
+                          if(confirm(`정보를 완벽 복구할까요?\n(수정 전 데이터: ${log.old_password})`)) {
+                            await supabase.from('buildings').upsert({ id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region, updated_at: new Date() });
+                            fetchData(); fetchStats(); alert("복구 완료!");
+                          }
+                        }} className="bg-red-600 text-white p-2.5 rounded-2xl active:scale-95 shadow-lg"><RotateCcw size={16}/></button>
+                      )}
                     </div>
-                    {log.event_type !== 'ADD' && (
-                      <button onClick={async () => {
-                        if(confirm(`정보를 완벽 복구할까요?\n(수정 전 데이터: ${log.old_password})`)) {
-                          await supabase.from('buildings').upsert({ id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region, updated_at: new Date() });
-                          fetchData(); fetchStats(); alert("복구 완료!");
-                        }
-                      }} className="bg-red-600 text-white p-2.5 rounded-2xl active:scale-95 shadow-lg"><RotateCcw size={16}/></button>
-                    )}
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -335,11 +363,11 @@ export default function Page() {
         </div>
       )}
 
-      {/* [잠금] 반투명 + 필기 애니메이션 플로팅 버튼 */}
+      {/* [잠금] 반투명 유리 효과 + 필기 애니메이션 플로팅 버튼 */}
       {!adminMode && (
         <button 
           onClick={() => {setEditingItem(null); setFormData({ region: '', name: '', password: '', note: '', address: '', b_type: '' }); setIsModalOpen(true);}} 
-          className="fixed bottom-10 right-6 bg-yellow-500/80 backdrop-blur-md text-black pl-5 pr-6 py-4 rounded-full shadow-[0_15px_35px_rgba(234,179,8,0.3)] z-[60] active:scale-90 transition-all flex items-center gap-2 group border-4 border-black/10 animate-pulse-slow overflow-hidden"
+          className="fixed bottom-10 right-6 bg-yellow-500/80 backdrop-blur-md text-black pl-5 pr-6 py-4 rounded-full shadow-[0_15px_35px_rgba(234,179,8,0.3)] z-[60] active:scale-90 transition-all flex items-center gap-2 group border-4 border-black/10 hover:bg-yellow-500 animate-pulse-slow overflow-hidden"
         >
           <div className="bg-black text-yellow-500 p-1.5 rounded-lg animate-scribble">
             <PenLine size={18} strokeWidth={3} />
