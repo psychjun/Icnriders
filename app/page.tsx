@@ -10,6 +10,7 @@ const supabase = createClient(
 
 // [잠금] 초성 검색 엔진
 const getChosung = (str: string) => {
+  if (!str) return "";
   const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
   let result = "";
   for (let i = 0; i < str.length; i++) {
@@ -31,19 +32,11 @@ const AnRaMuBokSeal = ({ className = "" }) => (
   </svg>
 );
 
-// [신규] 전형적인 한국 남녀 화장실 픽토그램 (🚻 스타일)
 const KoreanRestroomPictogram = ({ className = "", size = 20 }) => (
   <svg viewBox="0 0 100 100" width={size} height={size} className={className} fill="currentColor">
-    {/* 중앙 분리선 */}
     <rect x="49" y="10" width="2" height="80" rx="1" opacity="0.3" />
-    
-    {/* 남자 실루엣 */}
-    <circle cx="28" cy="22" r="10"/>
-    <path d="M28 36H16c-3.3 0-6 2.7-6 6v22h8v24c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4V64h4v24c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4V64h8V42c0-3.3-2.7-6-6-6Z"/>
-    
-    {/* 여자 실루엣 (A라인 치마 스타일) */}
-    <circle cx="72" cy="22" r="10"/>
-    <path d="M72 36H60c-3.3 0-6 2.7-6 6v18c0 1.7.7 3.2 1.8 4.3l8 8v16c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4V72.3l8-8c1.1-1.1 1.8-2.6 1.8-4.3V42c0-3.3-2.7-6-6-6Z"/>
+    <circle cx="28" cy="22" r="10"/><path d="M28 36H16c-3.3 0-6 2.7-6 6v22h8v24c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4V64h4v24c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4V64h8V42c0-3.3-2.7-6-6-6Z"/>
+    <circle cx="72" cy="22" r="10"/><path d="M72 36H60c-3.3 0-6 2.7-6 6v18c0 1.7.7 3.2 1.8 4.3l8 8v16c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4V72.3l8-8c1.1-1.1 1.8-2.6 1.8-4.3V42c0-3.3-2.7-6-6-6Z"/>
   </svg>
 );
 
@@ -57,7 +50,6 @@ export default function Page() {
   const [stats, setStats] = useState({ visits: 0, todayVisits: 0, logs: [] as any[] });
   const [ip, setIp] = useState('');
 
-  // 한국 시간 기준 날짜 문자열 계산 (YYYY-MM-DD)
   const getKSTDateString = () => {
     const now = new Date();
     return new Date(now.getTime() + (9 * 60 * 60 * 1000)).toISOString().split('T')[0];
@@ -68,17 +60,11 @@ export default function Page() {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const fetchData = async () => {
-    // 1. 건물 데이터 로드
     const { data: b } = await supabase.from('buildings').select('*').order('updated_at', { ascending: false });
     if (b) setData(b);
-    
-    // 2. 방문자 통계 로드 (오늘 기준 강제 동기화)
     const todayStr = getKSTDateString();
     const { count: totalCount } = await supabase.from('site_visits').select('*', { count: 'exact', head: true });
-    const { count: todayCount } = await supabase.from('site_visits')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', `${todayStr}T00:00:00Z`);
-    
+    const { count: todayCount } = await supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('created_at', `${todayStr}T00:00:00Z`);
     setStats(prev => ({ ...prev, visits: totalCount || 0, todayVisits: todayCount || 0 }));
   };
 
@@ -93,13 +79,9 @@ export default function Page() {
       setIp(resData.ip);
       const visitKey = `v_${getKSTDateString()}`;
       if (!sessionStorage.getItem(visitKey)) {
-        supabase.from('site_visits').insert([{ ip: resData.ip }]).then(({error}) => {
-          if(!error) {
-            sessionStorage.setItem(visitKey, '1');
-            fetchData();
-          } else {
-            console.error("방문 기록 실패:", error.message);
-          }
+        supabase.from('site_visits').insert([{ ip: resData.ip }]).then(() => {
+          sessionStorage.setItem(visitKey, '1');
+          fetchData();
         });
       }
     });
@@ -113,18 +95,7 @@ export default function Page() {
 
   const handleSave = async () => {
     if (!formData.name || !formData.password) return alert('필수 내용을 입력하세요.');
-    
-    const logEntry = { 
-      event_type: editingItem ? 'EDIT' : 'ADD',
-      old_name: editingItem ? editingItem.name : formData.name, 
-      old_password: editingItem ? editingItem.password : formData.password, 
-      old_note: editingItem ? editingItem.note : formData.note, 
-      old_address: editingItem ? editingItem.address : formData.address, 
-      old_b_type: editingItem ? editingItem.b_type : formData.b_type, 
-      old_region: editingItem ? editingItem.region : formData.region,
-      ip 
-    };
-
+    const logEntry = { event_type: editingItem ? 'EDIT' : 'ADD', old_name: editingItem ? editingItem.name : formData.name, old_password: editingItem ? editingItem.password : formData.password, old_note: editingItem ? editingItem.note : formData.note, old_address: editingItem ? editingItem.address : formData.address, old_b_type: editingItem ? editingItem.b_type : formData.b_type, old_region: editingItem ? editingItem.region : formData.region, ip };
     if (editingItem) {
       logEntry['building_id'] = editingItem.id;
       await supabase.from('building_logs').insert([logEntry]);
@@ -137,11 +108,12 @@ export default function Page() {
       }
     }
     setIsModalOpen(false); fetchData(); if(adminMode) fetchStats();
+    alert("저장되었습니다.");
   };
 
   const handleDelete = async () => {
     if (!editingItem) return;
-    if (confirm(`'${editingItem.name}' 데이터를 삭제하시겠습니까? (로그에 보존됨)`)) {
+    if (confirm(`'${editingItem.name}' 데이터를 삭제하시겠습니까?`)) {
       const logEntry = { building_id: editingItem.id, old_name: `[삭제됨] ${editingItem.name}`, old_password: editingItem.password, old_note: editingItem.note, old_address: editingItem.address, old_b_type: editingItem.b_type, old_region: editingItem.region, event_type: 'DELETE', ip };
       await supabase.from('building_logs').insert([logEntry]);
       await supabase.from('buildings').delete().eq('id', editingItem.id);
@@ -150,11 +122,27 @@ export default function Page() {
   };
 
   const isInitialState = activeTab === 'Home' && searchTerm === '';
+  
+  // [수정] 화장실 카테고리 특이사항 검색 강화 로직
   let filtered = isInitialState ? [] : data.filter(i => {
     const lowerSearch = searchTerm.toLowerCase();
-    const chosung = getChosung(i.name);
-    const searchMatch = i.name.toLowerCase().includes(lowerSearch) || i.password.includes(searchTerm) || chosung.includes(lowerSearch);
-    if (searchTerm !== '') return searchMatch;
+    const nameChosung = getChosung(i.name).toLowerCase();
+    const noteChosung = getChosung(i.note || "").toLowerCase();
+    const isToilet = i.region === '화장실';
+
+    // 기본 검색: 이름, 비밀번호, 이름 초성
+    let match = i.name.toLowerCase().includes(lowerSearch) || 
+                i.password.includes(searchTerm) || 
+                nameChosung.includes(lowerSearch);
+
+    // 화장실 카테고리일 경우 특이사항(상가이름 등)과 특이사항 초성도 검색
+    if (isToilet) {
+      match = match || 
+              (i.note && i.note.toLowerCase().includes(lowerSearch)) || 
+              noteChosung.includes(lowerSearch);
+    }
+
+    if (searchTerm !== '') return match;
     return (activeTab === '전체' || activeTab === '최근변경' || activeTab === 'Home') || i.region === activeTab;
   });
 
@@ -200,19 +188,19 @@ export default function Page() {
                 className="w-full p-4 pl-11 bg-[#1e293b] rounded-2xl border border-slate-700/50 focus:border-yellow-500/60 text-lg focus:outline-none shadow-xl transition-all font-bold placeholder:text-slate-700" 
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); if (activeTab === 'Home') setActiveTab('전체'); }} 
-                placeholder={searchTerm ? "" : "건물명 초성 검색 가능 (예: ㄱㄹㄷㅂ)"}
+                placeholder={searchTerm ? "" : "건물명 또는 화장실 상가명 초성 검색"}
               />
             </div>
             <div className="flex gap-1.5 mt-4 overflow-x-auto no-scrollbar pb-1">
               {['운서', '하늘', '운남', '화장실', '최근변경', '전체'].map(t => (
-                <button key={t} onClick={() => setActiveTab(activeTab === t ? 'Home' : t)} className={`px-3.5 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-[11px] ${activeTab === t ? 'bg-yellow-500 text-black shadow-lg' : 'bg-slate-800/40 text-slate-500 border border-slate-700/30'}`}>{t}</button>
+                <button key={t} onClick={() => setActiveTab(activeTab === t ? 'Home' : t)} className={`px-3.5 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-[11px] ${activeTab === t ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'bg-slate-800/40 text-slate-500 border border-slate-700/30'}`}>{t}</button>
               ))}
             </div>
           </div>
         )}
       </div>
 
-      {/* 리스트 구역 [핵심수정: 화장실 아이콘 변경] */}
+      {/* 리스트 구역 [잠금: 시안성 디자인 고정] */}
       {!adminMode && (
         <div className="p-5 space-y-5 relative z-10 min-h-[50px]">
           {filtered.map(i => {
@@ -226,10 +214,7 @@ export default function Page() {
                       {i.b_type && <span className={`text-[8px] bg-yellow-500/10 px-2 py-0.5 rounded-lg font-black text-yellow-500 uppercase border border-yellow-500/20`}>{i.b_type}</span>}
                     </div>
                     <div className="flex items-start gap-2">
-                      {/* [복구/수정] 화장실 테마일 때 전형적인 남녀 아이콘 표시 */}
-                      {isToilet ? (
-                        <KoreanRestroomPictogram size={22} className="text-cyan-400 shrink-0 mt-0.5" />
-                      ) : null}
+                      {isToilet ? <KoreanRestroomPictogram size={22} className="text-cyan-400 shrink-0 mt-0.5" /> : null}
                       <h2 className={`text-xl font-black ${isToilet ? 'text-cyan-100' : 'text-white'} tracking-tighter break-keep leading-tight`}>{i.name}</h2>
                     </div>
                     {i.address && (
@@ -247,7 +232,6 @@ export default function Page() {
                   <div className={`bg-black/40 border ${isToilet ? 'border-cyan-500/20' : 'border-slate-800/40'} p-4 rounded-3xl flex items-center justify-center`}>
                      <span className={`text-4xl font-mono font-black ${isToilet ? 'text-cyan-400' : 'text-yellow-400'} tracking-tighter drop-shadow-md`}>{i.password}</span>
                   </div>
-                  {/* [잠금] 특이사항 필드 (Note) */}
                   {i.note && <p className="text-[12px] text-slate-400 font-medium px-1 break-keep leading-snug"><span className={`${isToilet ? 'text-cyan-600' : 'text-slate-600'} font-black mr-2 uppercase`}>Note:</span> {i.note}</p>}
                 </div>
               </div>
@@ -256,14 +240,13 @@ export default function Page() {
         </div>
       )}
 
-      {/* 관리자 모드 [잠금: 롤백 기능] */}
+      {/* 관리자 모드 [잠금: 롤백 기능 고정] */}
       {adminMode && (
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-black text-yellow-400 uppercase tracking-tighter flex items-center gap-2"><ShieldCheck /> Admin</h2>
             <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-4 py-2 rounded-xl font-bold border border-red-900/30">Exit</button>
           </div>
-          {/* 달력 UI 유지 */}
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><CalendarIcon size={16}/> Daily Activity</h3>
@@ -288,7 +271,6 @@ export default function Page() {
               })}
             </div>
           </div>
-          {/* 로그 UI 유지 */}
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-4">
             <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><History size={16}/> Logs for {selectedDate}</h3>
             <div className="space-y-4 max-h-96 overflow-y-auto no-scrollbar">
@@ -304,7 +286,7 @@ export default function Page() {
                       </div>
                       {log.event_type !== 'ADD' && (
                         <button onClick={async () => {
-                          if(confirm(`정보를 완벽 복구할까요?\n(수정 전 데이터: ${log.old_password})`)) {
+                          if(confirm(`정보를 완벽 복구할까요?`)) {
                             await supabase.from('buildings').upsert({ id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region, updated_at: new Date() });
                             fetchData(); fetchStats(); alert("복구 완료!");
                           }
