@@ -8,7 +8,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
-// [잠금] 한글 초성 검색 엔진
 const getChosung = (str: string) => {
   const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
   let result = "";
@@ -38,36 +37,34 @@ export default function Page() {
   const [adminMode, setAdminMode] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const [stats, setStats] = useState({ visits: 0, todayVisits: 0, logs: [] as any[], visitLogs: [] as any[] });
-  
-  // 날짜 처리 로직 강화 (한국 시간 00시 기준)
-  const getTodayRange = () => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return start.toISOString();
-  };
-  
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [formData, setFormData] = useState({ region: '', name: '', password: '', note: '', address: '', b_type: '' });
+  const [stats, setStats] = useState({ visits: 0, todayVisits: 0, logs: [] as any[] });
   const [ip, setIp] = useState('');
+
+  // 날짜 계산 (한국 시간 보정)
+  const getKSTDate = () => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset() * 60000;
+    const kst = new Date(now.getTime() - offset + (9 * 3600000));
+    return kst.toISOString().split('T')[0];
+  };
+
+  const [selectedDate, setSelectedDate] = useState(getKSTDate());
+  const [formData, setFormData] = useState({ region: '', name: '', password: '', note: '', address: '', b_type: '' });
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const fetchData = async () => {
     const { data: b } = await supabase.from('buildings').select('*').order('updated_at', { ascending: false });
     if (b) setData(b);
     
-    // 전체 방문자
+    // 방문자 수 통계
     const { count: total } = await supabase.from('site_visits').select('*', { count: 'exact', head: true });
-    // 오늘 방문자 (시간차 보정 적용)
-    const { count: today } = await supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('created_at', getTodayRange());
-    
+    const { count: today } = await supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('created_at', getKSTDate());
     setStats(prev => ({ ...prev, visits: total || 0, todayVisits: today || 0 }));
   };
 
   const fetchStats = async () => {
     const { data: logs } = await supabase.from('building_logs').select('*').order('created_at', { ascending: false });
-    const { data: visits } = await supabase.from('site_visits').select('*').order('created_at', { ascending: false });
-    setStats(prev => ({ ...prev, logs: logs || [], visitLogs: visits || [] }));
+    setStats(prev => ({ ...prev, logs: logs || [] }));
   };
 
   useEffect(() => {
@@ -86,13 +83,13 @@ export default function Page() {
   const handleAdminAuth = () => {
     const pw = prompt('관리자 비밀번호를 입력하세요.');
     if (pw === 'bb3145Fm!@') { setAdminMode(true); fetchStats(); }
-    else { alert('접근 권한이 없습니다.'); }
+    else alert('접근 권한이 없습니다.');
   };
 
   const handleSave = async () => {
     if (!formData.name || !formData.password) return alert('필수 내용을 입력하세요.');
     
-    const logData: any = { 
+    const logEntry = { 
       event_type: editingItem ? 'EDIT' : 'ADD',
       old_name: editingItem ? editingItem.name : formData.name, 
       old_password: editingItem ? editingItem.password : formData.password, 
@@ -103,32 +100,26 @@ export default function Page() {
       ip 
     };
 
-    try {
-      if (editingItem) {
-        logData.building_id = editingItem.id;
-        await supabase.from('building_logs').insert([logData]);
-        await supabase.from('buildings').update({ ...formData, updated_at: new Date() }).eq('id', editingItem.id);
-      } else {
-        const { data: inserted } = await supabase.from('buildings').insert([{ ...formData, updated_at: new Date() }]).select();
-        if (inserted) {
-          logData.building_id = inserted[0].id;
-          await supabase.from('building_logs').insert([logData]);
-        }
+    if (editingItem) {
+      logEntry['building_id'] = editingItem.id;
+      await supabase.from('building_logs').insert([logEntry]);
+      await supabase.from('buildings').update({ ...formData, updated_at: new Date() }).eq('id', editingItem.id);
+    } else {
+      const { data: inserted } = await supabase.from('buildings').insert([{ ...formData, updated_at: new Date() }]).select();
+      if (inserted) {
+        logEntry['building_id'] = inserted[0].id;
+        await supabase.from('building_logs').insert([logEntry]);
       }
-      setIsModalOpen(false); 
-      await fetchData(); 
-      if(adminMode) await fetchStats();
-      alert("저장 및 기록 완료!");
-    } catch (e) {
-      alert("데이터 전송 실패. 네트워크를 확인하세요.");
     }
+    setIsModalOpen(false); fetchData(); if(adminMode) fetchStats();
+    alert("저장되었습니다.");
   };
 
   const handleDelete = async () => {
     if (!editingItem) return;
     if (confirm(`'${editingItem.name}' 데이터를 삭제하시겠습니까?`)) {
-      const logData = { building_id: editingItem.id, old_name: `[삭제됨] ${editingItem.name}`, old_password: editingItem.password, old_note: editingItem.note, old_address: editingItem.address, old_b_type: editingItem.b_type, old_region: editingItem.region, event_type: 'DELETE', ip };
-      await supabase.from('building_logs').insert([logData]);
+      const logEntry = { building_id: editingItem.id, old_name: `[삭제됨] ${editingItem.name}`, old_password: editingItem.password, old_note: editingItem.note, old_address: editingItem.address, old_b_type: editingItem.b_type, old_region: editingItem.region, event_type: 'DELETE', ip };
+      await supabase.from('building_logs').insert([logEntry]);
       await supabase.from('buildings').delete().eq('id', editingItem.id);
       setIsModalOpen(false); fetchData(); if(adminMode) fetchStats();
     }
@@ -140,20 +131,19 @@ export default function Page() {
     const chosung = getChosung(i.name);
     const searchMatch = i.name.toLowerCase().includes(lowerSearch) || i.password.includes(searchTerm) || chosung.includes(lowerSearch);
     if (searchTerm !== '') return searchMatch;
-    const regionMatch = (activeTab === '전체' || activeTab === '최근변경' || activeTab === 'Home') || i.region === activeTab;
-    return regionMatch;
+    return (activeTab === '전체' || activeTab === '최근변경' || activeTab === 'Home') || i.region === activeTab;
   });
 
-  if (activeTab === '최근변경') { filtered = [...filtered].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()); }
+  if (activeTab === '최근변경') filtered = [...filtered].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
-  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
-  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+  const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 
   return (
     <div className="min-h-screen bg-[#070b14] text-white font-sans tracking-tight pb-40 relative overflow-x-hidden text-sm">
       <div className="fixed inset-0 bg-[url('https://images.unsplash.com/photo-1558981285-6f0c94958bb6?q=80&w=1000&auto=format')] bg-cover bg-center opacity-[0.04] grayscale pointer-events-none z-0"></div>
 
-      {/* 헤더 [잠금: 오늘 방문자 최적화] */}
+      {/* 헤더 [잠금: 오늘 방문자 통계] */}
       <div className="bg-[#0f172a]/95 border-b border-slate-800/60 sticky top-0 z-40 backdrop-blur-lg shadow-2xl">
         <div className="p-3.5 flex items-center justify-between gap-2 relative z-10">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -177,6 +167,7 @@ export default function Page() {
           </button>
         </div>
 
+        {/* 검색창 [잠금] */}
         {!adminMode && (
           <div className="px-5 pb-5 relative z-10">
             <div className="relative group flex flex-col justify-center">
@@ -218,11 +209,11 @@ export default function Page() {
                   </div>
                   <div className="flex gap-1.5 shrink-0">
                     <button onClick={() => {setEditingItem(i); setFormData({ region: i.region || '', name: i.name, password: i.password, note: i.note, address: i.address || '', b_type: i.b_type || '' }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-800/50 active:scale-90 transition-all"><Edit2 size={16} /></button>
-                    <button onClick={() => {navigator.clipboard.writeText(i.password); alert('복사됨');}} className={`${isToilet ? 'bg-cyan-500 shadow-cyan-500/20' : 'bg-yellow-500 shadow-yellow-500/20'} p-2.5 rounded-xl text-black shadow-lg active:scale-90 transition-all`}><Copy size={18} /></button>
+                    <button onClick={() => {navigator.clipboard.writeText(i.password); alert('복사됨');}} className={`${isToilet ? 'bg-cyan-500' : 'bg-yellow-500'} p-2.5 rounded-xl text-black shadow-lg active:scale-90 transition-all`}><Copy size={18} /></button>
                   </div>
                 </div>
                 <div className="bg-black/40 border border-slate-800/40 p-4 rounded-3xl flex items-center justify-center">
-                   <span className={`text-4xl font-mono font-black ${isToilet ? 'text-cyan-400' : 'text-yellow-400'} tracking-tighter drop-shadow-md`}>{i.password}</span>
+                   <span className={`text-4xl font-mono font-black ${isToilet ? 'text-cyan-400' : 'text-yellow-400'} tracking-tighter`}>{i.password}</span>
                 </div>
               </div>
             );
@@ -234,7 +225,7 @@ export default function Page() {
       {adminMode && (
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-black text-yellow-400 uppercase tracking-tighter flex items-center gap-2"><ShieldCheck /> 관리자 모드</h2>
+            <h2 className="text-2xl font-black text-yellow-400 uppercase tracking-tighter flex items-center gap-2"><ShieldCheck /> Admin</h2>
             <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-4 py-2 rounded-xl font-bold border border-red-900/30">Exit</button>
           </div>
 
@@ -257,6 +248,7 @@ export default function Page() {
                 return (
                   <button key={day} onClick={() => setSelectedDate(dStr)} className={`aspect-square rounded-xl border flex flex-col items-center justify-center transition-all ${isSelected ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg scale-110 z-10' : hasEdit ? 'bg-red-500/20 border-red-500/40 text-white' : 'bg-slate-900/30 border-slate-800 text-slate-600 opacity-40'}`}>
                     <span className="text-[11px] font-black">{day}</span>
+                    {hasEdit && !isSelected && <div className="w-1 h-1 bg-red-500 rounded-full mt-0.5 animate-pulse"></div>}
                   </button>
                 );
               })}
@@ -266,34 +258,28 @@ export default function Page() {
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-4">
             <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><History size={16}/> Logs for {selectedDate}</h3>
             <div className="space-y-4 max-h-96 overflow-y-auto no-scrollbar">
-              {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).map((log, idx) => (
-                <div key={`l-${idx}`} className={`bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 ${log.event_type === 'ADD' ? 'border-l-green-500' : log.event_type === 'DELETE' ? 'border-l-red-500' : 'border-l-blue-500'} space-y-3`}>
-                  <div className="flex justify-between items-start">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] text-slate-500 font-bold mb-1 flex items-center gap-1">
-                        <Clock size={10} /> {new Date(log.created_at).toLocaleTimeString()} • IP: {log.ip}
-                      </p>
-                      <h4 className="text-sm font-black text-white truncate">
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded mr-2 ${log.event_type === 'ADD' ? 'bg-green-900/50 text-green-500' : log.event_type === 'DELETE' ? 'bg-red-900/50 text-red-500' : 'bg-blue-900/50 text-blue-500'}`}>{log.event_type}</span>
-                        {log.old_name}
-                      </h4>
-                    </div>
-                    {log.event_type !== 'ADD' && (
-                      <button 
-                        onClick={async () => {
-                          if(confirm(`[${log.old_name}] 정보를 완벽 복구할까요?`)) {
+              {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).length === 0 ? (
+                <div className="text-center py-10 opacity-30 italic font-bold">No activity logged.</div>
+              ) : (
+                stats.logs.filter(l => l.created_at.startsWith(selectedDate)).map((log, idx) => (
+                  <div key={`l-${idx}`} className={`bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 ${log.event_type === 'ADD' ? 'border-l-green-500' : log.event_type === 'DELETE' ? 'border-l-red-500' : 'border-l-blue-500'} space-y-3`}>
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0 flex-1 text-xs">
+                        <p className="text-slate-500 font-bold mb-1 flex items-center gap-1"><Clock size={10} /> {new Date(log.created_at).toLocaleTimeString()} • {log.ip}</p>
+                        <h4 className="font-black text-white truncate"><span className="text-[9px] px-1 bg-slate-800 rounded mr-1">{log.event_type}</span>{log.old_name}</h4>
+                      </div>
+                      {log.event_type !== 'ADD' && (
+                        <button onClick={async () => {
+                          if(confirm(`정보를 완벽 복구할까요?`)) {
                             await supabase.from('buildings').upsert({ id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region, updated_at: new Date() });
                             fetchData(); fetchStats();
                           }
-                        }}
-                        className="bg-red-600 text-white p-2.5 rounded-2xl active:scale-95 shadow-lg shadow-red-900/30"
-                      >
-                        <RotateCcw size={16}/>
-                      </button>
-                    )}
+                        }} className="bg-red-600 text-white p-2 rounded-2xl active:scale-95 shadow-lg"><RotateCcw size={16}/></button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -308,7 +294,7 @@ export default function Page() {
             <p className="text-[15px] text-white font-black leading-snug tracking-tight break-keep">오늘도 영종도의 모든 길 위에서<br /><span className="text-yellow-400 font-black">안라무복</span>하시길 기원합니다.</p>
           </div>
           <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group">
-            <p className="text-[12px] text-white font-bold tracking-tight">만든이 : <span className="text-yellow-400 font-black ml-1 uppercase">부업맨 HoJun</span></p>
+            <p className="text-[12px] text-white font-bold tracking-tight">만든이 : <span className="text-yellow-400 font-black ml-1 uppercase transition-colors">부업맨 HoJun</span></p>
           </div>
         </div>
       </footer>
@@ -322,12 +308,12 @@ export default function Page() {
             <div className="space-y-4">
               <div className="grid grid-cols-4 gap-2">
                 {['운서', '하늘', '운남', '화장실'].map(r => (
-                  <button key={r} onClick={() => setFormData({...formData, region: formData.region === r ? '' : r})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg shadow-yellow-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{r}</button>
+                  <button key={r} onClick={() => setFormData({...formData, region: formData.region === r ? '' : r})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{r}</button>
                 ))}
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {['아파트', '오피스텔', '빌라'].map(t => (
-                  <button key={t} onClick={() => setFormData({...formData, b_type: formData.b_type === t ? '' : t})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.b_type === t ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{t}</button>
+                  <button key={t} onClick={() => setFormData({...formData, b_type: formData.b_type === t ? '' : t})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.b_type === t ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{t}</button>
                 ))}
               </div>
               <input type="text" placeholder="건물 명칭 (필수)" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold placeholder:text-slate-800 shadow-inner" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
@@ -343,7 +329,7 @@ export default function Page() {
         </div>
       )}
 
-      {/* 플로팅 버튼 [잠금] */}
+      {/* [잠금] 플로팅 버튼 */}
       {!adminMode && (
         <button 
           onClick={() => {setEditingItem(null); setFormData({ region: '', name: '', password: '', note: '', address: '', b_type: '' }); setIsModalOpen(true);}} 
