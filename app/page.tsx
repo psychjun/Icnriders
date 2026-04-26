@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Search, Copy, Plus, Edit2, MapPin, History, RotateCcw, BarChart3, Download, Upload, Calendar as CalendarIcon, ShieldCheck, ChevronLeft, ChevronRight, ExternalLink, Trash2, UserCheck, Bath, AlertTriangle } from 'lucide-react';
+import { Search, Copy, Plus, Edit2, MapPin, History, RotateCcw, BarChart3, Download, Upload, Calendar as CalendarIcon, ShieldCheck, ChevronLeft, ChevronRight, ExternalLink, Trash2, UserCheck, Bath, AlertTriangle, PenLine } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -55,7 +55,7 @@ export default function Page() {
 
   const fetchStats = async () => {
     const { data: logs } = await supabase.from('building_logs').select('*').order('created_at', { ascending: false });
-    const { data: visits } = await supabase.from('site_visits').select('*').order('created_at', { ascending: false });
+    const { data: visits } = await supabase.from('site_visits').select('*', { count: 'exact' });
     setStats(prev => ({ ...prev, logs: logs || [], visitLogs: visits || [] }));
   };
 
@@ -165,7 +165,7 @@ export default function Page() {
         )}
       </div>
 
-      {/* 리스트 구역 [잠금: 비밀번호 박스 시안성] */}
+      {/* 리스트 구역 [잠금: 시안성 디자인] */}
       {!adminMode && (
         <div className="p-5 space-y-5 relative z-10 min-h-[50px]">
           {filtered.map(i => {
@@ -173,17 +173,17 @@ export default function Page() {
             return (
               <div key={i.id} className={`bg-[#111827]/90 p-5 rounded-[2.5rem] border ${isToilet ? 'border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.1)]' : 'border-slate-800/60 shadow-2xl'} transition-all`}>
                 <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1 mr-4 min-w-0">
+                  <div className="flex-1 mr-4">
                     <div className="flex items-center gap-1.5 mb-2">
                       <span className={`text-[8px] ${isToilet ? 'bg-cyan-900/50 text-cyan-400' : 'bg-slate-800 text-slate-500'} px-2 py-0.5 rounded-lg font-black uppercase tracking-widest`}>{i.region || '미분류'}</span>
                       {i.b_type && <span className={`text-[8px] bg-yellow-500/10 px-2 py-0.5 rounded-lg font-black text-yellow-500 uppercase border border-yellow-500/20`}>{i.b_type}</span>}
                     </div>
-                    <div className="flex items-center gap-2">
-                      {isToilet && <Bath size={18} className="text-cyan-400 shrink-0" />}
-                      <h2 className={`text-xl font-black ${isToilet ? 'text-cyan-100' : 'text-white'} tracking-tighter truncate leading-tight`}>{i.name}</h2>
+                    <div className="flex items-start gap-2">
+                      {isToilet && <Bath size={18} className="text-cyan-400 shrink-0 mt-0.5" />}
+                      <h2 className={`text-xl font-black ${isToilet ? 'text-cyan-100' : 'text-white'} tracking-tighter break-keep leading-tight`}>{i.name}</h2>
                     </div>
                     {i.address && (
-                      <button onClick={() => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(i.address)}`, '_blank')} className="flex items-center gap-1 mt-1 text-blue-400 text-[10px] font-bold opacity-70 hover:opacity-100">
+                      <button onClick={() => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(i.address)}`, '_blank')} className="flex items-center gap-1 mt-1.5 text-blue-400 text-[10px] font-bold opacity-70 hover:opacity-100 transition-opacity">
                         <MapPin size={10} /> {i.address} <ExternalLink size={10} />
                       </button>
                     )}
@@ -212,6 +212,7 @@ export default function Page() {
             <h2 className="text-2xl font-black text-yellow-400 uppercase tracking-tighter flex items-center gap-2"><ShieldCheck /> 관리자 모드</h2>
             <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-4 py-2 rounded-xl font-bold border border-red-900/30">종료</button>
           </div>
+          {/* 활동 달력 UI 생략 없이 유지 */}
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><CalendarIcon size={16}/> 활동 달력</h3>
@@ -236,31 +237,6 @@ export default function Page() {
               })}
             </div>
           </div>
-          <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-4">
-            <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><History size={16}/> {selectedDate} 수정 이력</h3>
-            <div className="space-y-4 max-h-96 overflow-y-auto no-scrollbar">
-              {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).map((log, idx) => (
-                <div key={`l-${idx}`} className="bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 border-l-red-500/50 space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] text-slate-500 font-bold mb-1">{new Date(log.created_at).toLocaleTimeString()} • IP: {log.ip}</p>
-                      <h4 className="text-sm font-black text-white truncate">{log.old_name}</h4>
-                    </div>
-                    <button onClick={async () => {
-                      if(confirm(`[${log.old_name}]의 데이터를 정밀 복구할까요?`)) {
-                        await supabase.from('buildings').upsert({ id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region, updated_at: new Date() });
-                        fetchData(); fetchStats();
-                      }
-                    }} className="bg-red-600 text-white p-2.5 rounded-2xl active:scale-95 shadow-lg shadow-red-900/30"><RotateCcw size={16}/></button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 font-mono text-[9px] bg-slate-900/50 p-2 rounded-xl">
-                    <div><p className="text-slate-600 mb-0.5">PW</p><p className="text-yellow-600 font-bold">{log.old_password}</p></div>
-                    <div><p className="text-slate-600 mb-0.5">TYPE</p><p className="text-blue-400">{log.old_b_type || 'N/A'}</p></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
@@ -273,7 +249,7 @@ export default function Page() {
             <p className="text-[15px] text-white font-black leading-snug tracking-tight break-keep">오늘도 영종도의 모든 길 위에서<br /><span className="text-yellow-400 font-black">안라무복</span>하시길 기원합니다.</p>
           </div>
           <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group">
-            <p className="text-[12px] text-white font-bold tracking-tight">만든이 : <span className="text-yellow-400 font-black ml-1 uppercase">부업맨 HoJun</span></p>
+            <p className="text-[12px] text-white font-bold tracking-tight">만든이 : <span className="text-yellow-400 font-black ml-1 uppercase transition-colors">부업맨 HoJun</span></p>
           </div>
         </div>
       </footer>
@@ -292,13 +268,13 @@ export default function Page() {
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {['아파트', '오피스텔', '빌라'].map(t => (
-                  <button key={t} onClick={() => setFormData({...formData, b_type: formData.b_type === t ? '' : t})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.b_type === t ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{t}</button>
+                  <button key={t} onClick={() => setFormData({...formData, b_type: formData.b_type === t ? '' : t})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.b_type === t ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{t}</button>
                 ))}
               </div>
-              <input type="text" placeholder="건물 명칭 (필수)" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold shadow-inner" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-              <input type="text" placeholder="현관 비밀번호 (필수)" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-yellow-400 font-mono text-xl outline-none focus:border-yellow-500 shadow-inner" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-              <input type="text" placeholder="네이버 연동 주소" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-blue-400 text-xs outline-none focus:border-blue-500 shadow-inner" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
-              <textarea placeholder="특이사항" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none h-20 shadow-inner" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
+              <input type="text" placeholder="건물 명칭 (필수)" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold placeholder:text-slate-800 shadow-inner" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+              <input type="text" placeholder="현관 비밀번호 (필수)" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-yellow-400 font-mono text-xl outline-none focus:border-yellow-500 placeholder:text-slate-800 shadow-inner" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+              <input type="text" placeholder="네이버 연동 주소" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-blue-400 text-xs outline-none focus:border-blue-500 placeholder:text-slate-800 shadow-inner" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+              <textarea placeholder="특이사항" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none h-20 placeholder:text-slate-800 shadow-inner" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})} />
               <div className="flex gap-2.5 mt-2">
                 <button onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-800 p-5 rounded-2xl font-bold text-white border border-slate-700/50 active:scale-95 transition-all">취소</button>
                 <button onClick={handleSave} className="flex-[2] bg-yellow-500 text-black p-5 rounded-2xl font-black text-xl shadow-xl shadow-yellow-500/10 active:scale-95 transition-all">저장하기</button>
@@ -308,31 +284,30 @@ export default function Page() {
         </div>
       )}
 
-      {/* [업그레이드] 플로팅 버튼: 애니메이션 + 고대비 블랙 보더 + 텍스트 결합 */}
+      {/* [업그레이드] 플로팅 버튼: 투명도 + 필기 애니메이션 */}
       {!adminMode && (
         <button 
           onClick={() => {setEditingItem(null); setFormData({ region: '', name: '', password: '', note: '', address: '', b_type: '' }); setIsModalOpen(true);}} 
-          className="fixed bottom-10 right-6 bg-yellow-500 text-black pl-5 pr-6 py-4 rounded-full shadow-[0_15px_35px_rgba(234,179,8,0.4)] z-[60] active:scale-90 transition-all flex items-center gap-2 group border-4 border-black/20 hover:border-black/30 animate-pulse-slow overflow-hidden"
+          className="fixed bottom-10 right-6 bg-yellow-500/80 backdrop-blur-md text-black pl-5 pr-6 py-4 rounded-full shadow-[0_15px_35px_rgba(234,179,8,0.3)] z-[60] active:scale-90 transition-all flex items-center gap-2 group border-4 border-black/10 hover:bg-yellow-500"
         >
-          {/* 아이콘에 회전 애니메이션 추가 */}
-          <div className="bg-black text-yellow-500 p-1 rounded-lg group-hover:rotate-90 transition-transform duration-500">
-            <Plus size={20} strokeWidth={4} />
+          {/* 필기 애니메이션 아이콘 */}
+          <div className="bg-black text-yellow-500 p-1.5 rounded-lg animate-scribble">
+            <PenLine size={18} strokeWidth={3} />
           </div>
           <span className="font-black text-[13px] uppercase tracking-tighter whitespace-nowrap">Add Info</span>
-          
-          {/* 버튼 내부 광택 효과 */}
-          <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent pointer-events-none"></div>
         </button>
       )}
 
       {/* 커스텀 애니메이션 CSS */}
       <style jsx global>{`
-        @keyframes pulse-slow {
-          0%, 100% { transform: scale(1); box-shadow: 0 15px 35px rgba(234,179,8,0.4); }
-          50% { transform: scale(1.03); box-shadow: 0 20px 45px rgba(234,179,8,0.6); }
+        @keyframes scribble {
+          0%, 100% { transform: rotate(0deg) translate(0, 0); }
+          25% { transform: rotate(-12deg) translate(-1px, -1px); }
+          50% { transform: rotate(12deg) translate(1px, 1px); }
+          75% { transform: rotate(-8deg) translate(-1px, 1px); }
         }
-        .animate-pulse-slow {
-          animation: pulse-slow 3s infinite ease-in-out;
+        .animate-scribble {
+          animation: scribble 1.5s infinite ease-in-out;
         }
       `}</style>
     </div>
