@@ -39,26 +39,31 @@ export default function Page() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [stats, setStats] = useState({ visits: 0, todayVisits: 0, logs: [] as any[] });
-  
-  // 한국 시간(KST) 보정 날짜 함수
-  const getKST = (date = new Date()) => {
-    const kstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
-    return kstDate;
-  };
-  const getKSTString = (date = new Date()) => getKST(date).toISOString().split('T')[0];
-
-  const [selectedDate, setSelectedDate] = useState(getKSTString());
-  const [formData, setFormData] = useState({ region: '', name: '', password: '', note: '', address: '', b_type: '' });
   const [ip, setIp] = useState('');
+
+  // [수정] 기기 현지 시간 기준으로 '오늘의 시작'을 가져오는 가장 확실한 방법
+  const getTodayStart = () => {
+    const d = new Date();
+    // YYYY-MM-DD 형식으로 로컬 날짜 추출
+    const localDate = d.toLocaleDateString('sv-SE'); 
+    return `${localDate}T00:00:00Z`;
+  };
+
+  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('sv-SE'));
+  const [formData, setFormData] = useState({ region: '', name: '', password: '', note: '', address: '', b_type: '' });
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const fetchData = async () => {
+    // 건물 데이터 로드
     const { data: b } = await supabase.from('buildings').select('*').order('updated_at', { ascending: false });
     if (b) setData(b);
     
-    // 방문자 통계 (KST 기준)
+    // 방문자 통계 (로컬 날짜 기준 쿼리)
     const { count: total } = await supabase.from('site_visits').select('*', { count: 'exact', head: true });
-    const { count: today } = await supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('created_at', getKSTString());
+    const { count: today } = await supabase.from('site_visits')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', getTodayStart());
+    
     setStats(prev => ({ ...prev, visits: total || 0, todayVisits: today || 0 }));
   };
 
@@ -71,9 +76,11 @@ export default function Page() {
     fetchData();
     fetch('https://api.ipify.org?format=json').then(res => res.json()).then(resData => {
       setIp(resData.ip);
-      if (!sessionStorage.getItem('v')) {
+      // 세션에 오늘 날짜 저장 (날짜 바뀌면 새로 카운트)
+      const visitKey = `v_${new Date().toLocaleDateString('sv-SE')}`;
+      if (!sessionStorage.getItem(visitKey)) {
         supabase.from('site_visits').insert([{ ip: resData.ip }]).then(() => {
-          sessionStorage.setItem('v', '1');
+          sessionStorage.setItem(visitKey, '1');
           fetchData();
         });
       }
@@ -86,11 +93,10 @@ export default function Page() {
     else alert('접근 권한이 없습니다.');
   };
 
-  // [수정] 롤백을 위해 모든 필드를 명시적으로 기록
   const handleSave = async () => {
     if (!formData.name || !formData.password) return alert('필수 내용을 입력하세요.');
     
-    const logEntry: any = { 
+    const logEntry = { 
       event_type: editingItem ? 'EDIT' : 'ADD',
       old_name: editingItem ? editingItem.name : formData.name, 
       old_password: editingItem ? editingItem.password : formData.password, 
@@ -102,34 +108,23 @@ export default function Page() {
     };
 
     if (editingItem) {
-      logEntry.building_id = editingItem.id;
+      logEntry['building_id'] = editingItem.id;
       await supabase.from('building_logs').insert([logEntry]);
       await supabase.from('buildings').update({ ...formData, updated_at: new Date() }).eq('id', editingItem.id);
     } else {
       const { data: inserted } = await supabase.from('buildings').insert([{ ...formData, updated_at: new Date() }]).select();
       if (inserted) {
-        logEntry.building_id = inserted[0].id;
+        logEntry['building_id'] = inserted[0].id;
         await supabase.from('building_logs').insert([logEntry]);
       }
     }
     setIsModalOpen(false); fetchData(); if(adminMode) fetchStats();
-    alert("저장되었습니다.");
   };
 
   const handleDelete = async () => {
     if (!editingItem) return;
-    if (confirm(`'${editingItem.name}' 데이터를 삭제하시겠습니까? (로그에 보존됨)`)) {
-      const logEntry = { 
-        building_id: editingItem.id, 
-        old_name: `[삭제됨] ${editingItem.name}`, 
-        old_password: editingItem.password, 
-        old_note: editingItem.note, 
-        old_address: editingItem.address, 
-        old_b_type: editingItem.b_type, 
-        old_region: editingItem.region, 
-        event_type: 'DELETE', 
-        ip 
-      };
+    if (confirm(`'${editingItem.name}' 데이터를 삭제하시겠습니까?`)) {
+      const logEntry = { building_id: editingItem.id, old_name: `[삭제됨] ${editingItem.name}`, old_password: editingItem.password, old_note: editingItem.note, old_address: editingItem.address, old_b_type: editingItem.b_type, old_region: editingItem.region, event_type: 'DELETE', ip };
       await supabase.from('building_logs').insert([logEntry]);
       await supabase.from('buildings').delete().eq('id', editingItem.id);
       setIsModalOpen(false); fetchData(); if(adminMode) fetchStats();
@@ -154,7 +149,7 @@ export default function Page() {
     <div className="min-h-screen bg-[#070b14] text-white font-sans tracking-tight pb-40 relative overflow-x-hidden text-sm">
       <div className="fixed inset-0 bg-[url('https://images.unsplash.com/photo-1558981285-6f0c94958bb6?q=80&w=1000&auto=format')] bg-cover bg-center opacity-[0.04] grayscale pointer-events-none z-0"></div>
 
-      {/* 헤더 [잠금: 오늘 방문자 통계 최적화] */}
+      {/* 헤더 [잠금: 통계 UI 고정] */}
       <div className="bg-[#0f172a]/95 border-b border-slate-800/60 sticky top-0 z-40 backdrop-blur-lg shadow-2xl">
         <div className="p-3.5 flex items-center justify-between gap-2 relative z-10">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -199,7 +194,7 @@ export default function Page() {
         )}
       </div>
 
-      {/* 리스트 구역 [잠금: 특이사항 표시 복구 및 긴 이름 줄바꿈] */}
+      {/* 리스트 구역 [잠금: 특이사항 표시 유지] */}
       {!adminMode && (
         <div className="p-5 space-y-5 relative z-10 min-h-[50px]">
           {filtered.map(i => {
@@ -226,7 +221,7 @@ export default function Page() {
                   <div className={`bg-black/40 border ${isToilet ? 'border-cyan-500/20' : 'border-slate-800/40'} p-4 rounded-3xl flex items-center justify-center`}>
                      <span className={`text-4xl font-mono font-black ${isToilet ? 'text-cyan-400' : 'text-yellow-400'} tracking-tighter drop-shadow-md`}>{i.password}</span>
                   </div>
-                  {/* [고정] 특이사항 필드 */}
+                  {/* [고정] 특이사항 필드 - 절대 누락 금지 */}
                   {i.note && <p className="text-[12px] text-slate-400 font-medium px-1 break-keep leading-snug"><span className={`${isToilet ? 'text-cyan-600' : 'text-slate-600'} font-black mr-2 uppercase`}>Note:</span> {i.note}</p>}
                 </div>
               </div>
@@ -235,14 +230,13 @@ export default function Page() {
         </div>
       )}
 
-      {/* 관리자 모드 [완벽 롤백 엔진] */}
+      {/* 관리자 모드 [잠금: 롤백 기능 고정] */}
       {adminMode && (
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-black text-yellow-400 uppercase tracking-tighter flex items-center gap-2"><ShieldCheck /> Admin</h2>
             <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-4 py-2 rounded-xl font-bold border border-red-900/30">Exit</button>
           </div>
-
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><CalendarIcon size={16}/> Activity Calendar</h3>
@@ -267,7 +261,6 @@ export default function Page() {
               })}
             </div>
           </div>
-
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-4">
             <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><History size={16}/> Logs for {selectedDate}</h3>
             <div className="space-y-4 max-h-96 overflow-y-auto no-scrollbar">
@@ -284,12 +277,7 @@ export default function Page() {
                       {log.event_type !== 'ADD' && (
                         <button onClick={async () => {
                           if(confirm(`정보를 완벽 복구할까요?\n(수정 전 데이터: ${log.old_password})`)) {
-                            await supabase.from('buildings').upsert({ 
-                              id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), 
-                              password: log.old_password, note: log.old_note, 
-                              address: log.old_address, b_type: log.old_b_type, 
-                              region: log.old_region, updated_at: new Date() 
-                            });
+                            await supabase.from('buildings').upsert({ id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region, updated_at: new Date() });
                             fetchData(); fetchStats(); alert("복구 완료!");
                           }
                         }} className="bg-red-600 text-white p-2.5 rounded-2xl active:scale-95 shadow-lg"><RotateCcw size={16}/></button>
@@ -312,7 +300,7 @@ export default function Page() {
             <p className="text-[15px] text-white font-black leading-snug tracking-tight break-keep">오늘도 영종도의 모든 길 위에서<br /><span className="text-yellow-400 font-black">안라무복</span>하시길 기원합니다.</p>
           </div>
           <div className="bg-[#070b14] px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner group">
-            <p className="text-[12px] text-white font-bold tracking-tight">만든이 : <span className="text-yellow-400 font-black ml-1 uppercase">부업맨 HoJun</span></p>
+            <p className="text-[12px] text-white font-bold tracking-tight">만든이 : <span className="text-yellow-400 font-black ml-1 uppercase transition-colors">부업맨 HoJun</span></p>
           </div>
         </div>
       </footer>
@@ -347,7 +335,7 @@ export default function Page() {
         </div>
       )}
 
-      {/* [잠금] 투명도 + 필기 애니메이션 플로팅 버튼 */}
+      {/* [잠금] 반투명 + 필기 애니메이션 플로팅 버튼 */}
       {!adminMode && (
         <button 
           onClick={() => {setEditingItem(null); setFormData({ region: '', name: '', password: '', note: '', address: '', b_type: '' }); setIsModalOpen(true);}} 
