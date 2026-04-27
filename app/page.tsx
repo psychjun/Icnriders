@@ -135,24 +135,12 @@ export default function Page() {
 
   if (activeTab === '최근변경') filtered = [...filtered].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
-  // [신규] 특정 날짜의 상세 데이터 계산 엔진
   const selectedDayDetail = useMemo(() => {
     if (!adminMode) return null;
     const dayLogs = stats.logs.filter(l => l.created_at.startsWith(selectedDate));
     const dayVisits = stats.visitLogs.filter(v => v.created_at.startsWith(selectedDate));
-    
-    // IP별 방문 횟수 집계
-    const ipCounts = dayVisits.reduce((acc: any, curr) => {
-      acc[curr.ip] = (acc[curr.ip] || 0) + 1;
-      return acc;
-    }, {});
-
-    return {
-      visitCount: dayVisits.length,
-      addCount: dayLogs.filter(l => l.event_type === 'ADD').length,
-      editCount: dayLogs.filter(l => l.event_type === 'EDIT' || l.event_type === 'DELETE').length,
-      visitorDetails: Object.entries(ipCounts).sort((a:any, b:any) => b[1] - a[1])
-    };
+    const ipCounts = dayVisits.reduce((acc: any, curr) => { acc[curr.ip] = (acc[curr.ip] || 0) + 1; return acc; }, {});
+    return { visitCount: dayVisits.length, addCount: dayLogs.filter(l => l.event_type === 'ADD').length, editCount: dayLogs.filter(l => l.event_type === 'EDIT' || l.event_type === 'DELETE').length, visitorDetails: Object.entries(ipCounts).sort((a:any, b:any) => b[1] - a[1]) };
   }, [adminMode, selectedDate, stats.logs, stats.visitLogs]);
 
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
@@ -207,7 +195,7 @@ export default function Page() {
         )}
       </div>
 
-      {/* 리스트 구역 [잠금] */}
+      {/* 리스트 구역 [복구: 주소 및 지도 버튼 다시 등장] */}
       {!adminMode && (
         <div className="p-5 space-y-5 relative z-10 min-h-[50px]">
           {filtered.map(i => {
@@ -224,6 +212,12 @@ export default function Page() {
                       {isToilet ? <KoreanRestroomPictogram size={22} className="text-cyan-400 shrink-0 mt-0.5" /> : null}
                       <h2 className={`text-xl font-black ${isToilet ? 'text-cyan-100' : 'text-white'} tracking-tighter break-keep leading-tight`}>{i.name}</h2>
                     </div>
+                    {/* [복구] 주소 및 지도 링크 코드 */}
+                    {i.address && (
+                      <button onClick={() => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(i.address)}`, '_blank')} className="flex items-center gap-1 mt-1.5 text-blue-400 text-[10px] font-bold opacity-70 hover:opacity-100 transition-opacity">
+                        <MapPin size={10} /> {i.address} <ExternalLink size={10} />
+                      </button>
+                    )}
                   </div>
                   <div className="flex gap-1.5 shrink-0">
                     <button onClick={() => {setEditingItem(i); setFormData({ region: i.region || '', name: i.name, password: i.password, note: i.note || '', address: i.address || '', b_type: i.b_type || '' }); setIsModalOpen(true);}} className="bg-slate-800/50 p-2.5 rounded-xl text-slate-600 hover:text-yellow-500 border border-slate-800/50 active:scale-90 transition-all"><Edit2 size={16} /></button>
@@ -242,15 +236,13 @@ export default function Page() {
         </div>
       )}
 
-      {/* 관리자 모드 [업그레이드: 인디케이터 기반 캘린더 & 정밀 분석 패널] */}
+      {/* 관리자 모드 [잠금: 인디케이터 기반 캘린더 & 정밀 분석] */}
       {adminMode && (
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-black text-yellow-400 uppercase tracking-tighter flex items-center gap-2"><ShieldCheck /> Admin Dashboard</h2>
+            <h2 className="text-2xl font-black text-yellow-400 uppercase tracking-tighter flex items-center gap-2"><ShieldCheck /> Admin</h2>
             <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-4 py-2 rounded-xl font-bold border border-red-900/30">Exit</button>
           </div>
-
-          {/* [업그레이드] 인디케이터 기반 캘린더 */}
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><CalendarIcon size={16}/> Activity Map</h3>
@@ -268,121 +260,41 @@ export default function Page() {
                 const dayEditLogs = stats.logs.filter(l => l.created_at.startsWith(dStr));
                 const hasVisit = stats.visitLogs.some(v => v.created_at.startsWith(dStr));
                 const isSelected = selectedDate === dStr;
-                
                 return (
-                  <button key={day} onClick={() => setSelectedDate(dStr)} 
-                    className={`aspect-square rounded-2xl border flex flex-col items-center justify-center transition-all relative
-                    ${isSelected ? 'bg-yellow-500 border-yellow-500 text-black shadow-[0_0_20px_rgba(234,179,8,0.4)] scale-110 z-10' 
-                    : 'bg-slate-900/40 border-slate-800/60 text-slate-400'}`}>
-                    
+                  <button key={day} onClick={() => setSelectedDate(dStr)} className={`aspect-square rounded-2xl border flex flex-col items-center justify-center transition-all relative ${isSelected ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg scale-110 z-10' : 'bg-slate-900/40 border-slate-800/60 text-slate-400'}`}>
                     <span className="text-[13px] font-black">{day}</span>
-                    
-                    {/* 방문자 인디케이터: 하단 파란색 바 */}
-                    {hasVisit && (
-                      <div className={`absolute bottom-1.5 w-5 h-0.5 rounded-full ${isSelected ? 'bg-black/40' : 'bg-blue-500/60'}`}></div>
-                    )}
-                    
-                    {/* [돋보임] 입력/수정 인디케이터: 우상단 빨간색 글로우 점 */}
-                    {dayEditLogs.length > 0 && (
-                      <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse"></div>
-                    )}
+                    {hasVisit && <div className={`absolute bottom-1.5 w-5 h-0.5 rounded-full ${isSelected ? 'bg-black/40' : 'bg-blue-500/60'}`}></div>}
+                    {dayEditLogs.length > 0 && <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse"></div>}
                   </button>
                 );
               })}
             </div>
-            <div className="mt-6 flex gap-4 px-2">
-               <div className="flex items-center gap-1.5 text-[9px] text-slate-500 font-bold uppercase"><div className="w-2 h-0.5 bg-blue-500/60 rounded-full"></div> Visitors</div>
-               <div className="flex items-center gap-1.5 text-[9px] text-slate-500 font-bold uppercase"><div className="w-2 h-2 bg-red-500 rounded-full shadow-[0_0_5px_rgba(239,68,68,0.6)]"></div> Data Activity</div>
-            </div>
           </div>
-
-          {/* [신규] 날짜별 정밀 분석 패널 */}
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-6">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-black text-white tracking-tighter flex items-center gap-2">
-                <Clock size={18} className="text-yellow-500" /> {selectedDate} Report
-              </h3>
-              <div className="bg-black/40 px-3 py-1 rounded-xl border border-slate-800 text-[10px] font-black text-slate-500 uppercase tracking-widest">Selected Date</div>
-            </div>
-
-            {/* 주요 지표 3종 */}
+            <h3 className="text-lg font-black text-white tracking-tighter flex items-center gap-2"><Clock size={18} className="text-yellow-500" /> {selectedDate} Report</h3>
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-slate-900/60 p-4 rounded-3xl border border-slate-800/60 text-center">
-                <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Visits</p>
-                <p className="text-xl font-black text-blue-400">{selectedDayDetail?.visitCount}</p>
-              </div>
-              <div className="bg-slate-900/60 p-4 rounded-3xl border border-slate-800/60 text-center">
-                <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">New Data</p>
-                <p className="text-xl font-black text-green-500">{selectedDayDetail?.addCount}</p>
-              </div>
-              <div className="bg-slate-900/60 p-4 rounded-3xl border border-slate-800/60 text-center">
-                <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Modifications</p>
-                <p className="text-xl font-black text-red-500">{selectedDayDetail?.editCount}</p>
-              </div>
+              <div className="bg-slate-900/60 p-4 rounded-3xl border border-slate-800/60 text-center"><p className="text-[9px] text-slate-500 font-bold mb-1">Visits</p><p className="text-xl font-black text-blue-400">{selectedDayDetail?.visitCount}</p></div>
+              <div className="bg-slate-900/60 p-4 rounded-3xl border border-slate-800/60 text-center"><p className="text-[9px] text-slate-500 font-bold mb-1">New</p><p className="text-xl font-black text-green-500">{selectedDayDetail?.addCount}</p></div>
+              <div className="bg-slate-900/60 p-4 rounded-3xl border border-slate-800/60 text-center"><p className="text-[9px] text-slate-500 font-bold mb-1">Mod</p><p className="text-xl font-black text-red-500">{selectedDayDetail?.editCount}</p></div>
             </div>
-
-            {/* [신규] 방문자 IP 리스트 (펼쳐보기) */}
-            <div className="space-y-3">
-              <button 
-                onClick={() => setShowVisitorList(!showVisitorList)}
-                className="w-full flex items-center justify-between p-4 bg-slate-900/40 rounded-2xl border border-slate-800/60 hover:bg-slate-900/60 transition-all"
-              >
-                <div className="flex items-center gap-2">
-                  <Users size={16} className="text-blue-400" />
-                  <span className="text-xs font-black text-slate-300">Detailed Visitor IP List</span>
-                  <span className="text-[10px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-lg ml-1 font-bold">{selectedDayDetail?.visitorDetails.length} Users</span>
-                </div>
-                {showVisitorList ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </button>
-              
-              {showVisitorList && (
-                <div className="bg-black/20 rounded-3xl border border-slate-800/40 p-2 space-y-1 max-h-48 overflow-y-auto no-scrollbar animate-in slide-in-from-top-2 duration-300">
-                  {selectedDayDetail?.visitorDetails.length === 0 ? (
-                    <p className="text-center py-4 text-xs text-slate-600 font-bold italic">No visitor data available.</p>
-                  ) : (
-                    selectedDayDetail?.visitorDetails.map(([ip, count]: any, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 bg-slate-900/40 rounded-2xl">
-                        <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                          <span className="text-[11px] font-mono font-bold text-slate-300">{ip}</span>
-                        </div>
-                        <span className="text-[10px] font-black text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-lg">{count} hits</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* 활동 로그 */}
-            <div className="space-y-3 pt-2">
-              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-black uppercase mb-2">
-                <History size={12} /> Action Logs
+            <button onClick={() => setShowVisitorList(!showVisitorList)} className="w-full flex items-center justify-between p-4 bg-slate-900/40 rounded-2xl border border-slate-800/60 transition-all">
+              <div className="flex items-center gap-2"><Users size={16} className="text-blue-400" /><span className="text-xs font-black text-slate-300">Visitor IP List</span></div>
+              {showVisitorList ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+            {showVisitorList && (
+              <div className="bg-black/20 rounded-3xl border border-slate-800/40 p-2 space-y-1 max-h-48 overflow-y-auto no-scrollbar">
+                {selectedDayDetail?.visitorDetails.map(([ip, count]: any, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 bg-slate-900/40 rounded-2xl"><span className="text-[11px] font-mono font-bold text-slate-300">{ip}</span><span className="text-[10px] font-black text-yellow-500">{count} hits</span></div>
+                ))}
               </div>
-              <div className="space-y-3 max-h-80 overflow-y-auto no-scrollbar">
-                {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).length === 0 ? (
-                  <div className="text-center py-10 opacity-30 italic font-bold text-xs">No data activity logged for this date.</div>
-                ) : (
-                  stats.logs.filter(l => l.created_at.startsWith(selectedDate)).map((log, idx) => (
-                    <div key={`l-${idx}`} className={`bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 ${log.event_type === 'ADD' ? 'border-l-green-500' : log.event_type === 'DELETE' ? 'border-l-red-500' : 'border-l-blue-500'} space-y-3`}>
-                      <div className="flex justify-between items-start">
-                        <div className="min-w-0 flex-1 text-xs">
-                          <p className="text-[10px] text-slate-500 font-bold mb-1 flex items-center gap-1"><Clock size={10} /> {new Date(log.created_at).toLocaleTimeString()} • {log.ip}</p>
-                          <h4 className="font-black text-white truncate"><span className="text-[9px] px-1 bg-slate-800 rounded mr-1 uppercase">{log.event_type}</span>{log.old_name}</h4>
-                        </div>
-                        {log.event_type !== 'ADD' && (
-                          <button onClick={async () => {
-                            if(confirm(`정보를 완벽 복구할까요?\n(수정 전 데이터: ${log.old_password})`)) {
-                              await supabase.from('buildings').upsert({ id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region, updated_at: new Date() });
-                              fetchData(); fetchStats(); alert("복구 완료!");
-                            }
-                          }} className="bg-red-600 text-white p-2.5 rounded-2xl active:scale-95 shadow-lg"><RotateCcw size={16}/></button>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+            )}
+            <div className="space-y-3 max-h-80 overflow-y-auto no-scrollbar pt-2">
+                {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).map((log, idx) => (
+                  <div key={`l-${idx}`} className={`bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 ${log.event_type === 'ADD' ? 'border-l-green-500' : log.event_type === 'DELETE' ? 'border-l-red-500' : 'border-l-blue-500'} flex justify-between items-center`}>
+                    <div className="min-w-0 flex-1"><p className="text-[10px] text-slate-500 font-bold mb-1">{new Date(log.created_at).toLocaleTimeString()} • {log.ip}</p><h4 className="font-black text-white truncate">{log.old_name}</h4></div>
+                    {log.event_type !== 'ADD' && <button onClick={async () => { if(confirm(`복구할까요?`)) { await supabase.from('buildings').upsert({ id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region, updated_at: new Date() }); fetchData(); fetchStats(); alert("복구 완료!"); } }} className="bg-red-600 text-white p-2.5 rounded-2xl active:scale-95"><RotateCcw size={16}/></button>}
+                  </div>
+                ))}
             </div>
           </div>
         </div>
@@ -402,16 +314,22 @@ export default function Page() {
         </div>
       </footer>
 
-      {/* 모달 [잠금] */}
+      {/* 모달 [복구: 건물 종류 선택 버튼 다시 활성화] */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-sm">
-          <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl break-keep relative">
+          <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl break-keep relative animate-in zoom-in-95 duration-200">
             {editingItem && <button onClick={handleDelete} className="absolute top-8 right-8 text-red-500 hover:bg-red-500/10 p-2 rounded-xl transition-all"><Trash2 size={22} /></button>}
             <h3 className="text-2xl font-black text-yellow-400 mb-8 tracking-tighter uppercase">{editingItem ? 'Edit Info' : 'New Entry'}</h3>
             <div className="space-y-4">
               <div className="grid grid-cols-4 gap-2">
                 {['운서', '하늘', '운남', '화장실'].map(r => (
                   <button key={r} onClick={() => setFormData({...formData, region: formData.region === r ? '' : r})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg shadow-yellow-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{r}</button>
+                ))}
+              </div>
+              {/* [복구] 건물 종류 선택 버튼 */}
+              <div className="grid grid-cols-3 gap-2">
+                {['아파트', '오피스텔', '빌라'].map(t => (
+                  <button key={t} onClick={() => setFormData({...formData, b_type: formData.b_type === t ? '' : t})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.b_type === t ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{t}</button>
                 ))}
               </div>
               <input type="text" placeholder="건물 명칭 (필수)" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold placeholder:text-slate-800 shadow-inner" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
