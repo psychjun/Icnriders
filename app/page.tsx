@@ -1,7 +1,7 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Search, Copy, Plus, Edit2, MapPin, History, RotateCcw, BarChart3, Calendar as CalendarIcon, ShieldCheck, ChevronLeft, ChevronRight, ExternalLink, Trash2, UserCheck, Bath, AlertTriangle, PenLine, Clock } from 'lucide-react';
+import { Search, Copy, Plus, Edit2, MapPin, History, RotateCcw, BarChart3, Calendar as CalendarIcon, ShieldCheck, ChevronLeft, ChevronRight, ExternalLink, Trash2, UserCheck, Bath, AlertTriangle, PenLine, Clock, TrendingUp } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -47,12 +47,11 @@ export default function Page() {
   const [adminMode, setAdminMode] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
-  const [stats, setStats] = useState({ visits: 0, todayVisits: 0, logs: [] as any[] });
+  const [stats, setStats] = useState({ visits: 0, todayVisits: 0, logs: [] as any[], visitLogs: [] as any[] });
   const [ip, setIp] = useState('');
 
-  const getKSTDateString = () => {
-    const now = new Date();
-    return new Date(now.getTime() + (9 * 60 * 60 * 1000)).toISOString().split('T')[0];
+  const getKSTDateString = (date = new Date()) => {
+    return new Date(date.getTime() + (9 * 60 * 60 * 1000)).toISOString().split('T')[0];
   };
 
   const [selectedDate, setSelectedDate] = useState(getKSTDateString());
@@ -70,7 +69,8 @@ export default function Page() {
 
   const fetchStats = async () => {
     const { data: logs } = await supabase.from('building_logs').select('*').order('created_at', { ascending: false });
-    setStats(prev => ({ ...prev, logs: logs || [] }));
+    const { data: vLogs } = await supabase.from('site_visits').select('*').order('created_at', { ascending: false });
+    setStats(prev => ({ ...prev, logs: logs || [], visitLogs: vLogs || [] }));
   };
 
   useEffect(() => {
@@ -108,7 +108,6 @@ export default function Page() {
       }
     }
     setIsModalOpen(false); fetchData(); if(adminMode) fetchStats();
-    alert("저장되었습니다.");
   };
 
   const handleDelete = async () => {
@@ -121,32 +120,45 @@ export default function Page() {
     }
   };
 
+  // [잠금] 화장실 카테고리 특이사항 검색 강화 엔진
   const isInitialState = activeTab === 'Home' && searchTerm === '';
-  
-  // [수정] 화장실 카테고리 특이사항 검색 강화 로직
   let filtered = isInitialState ? [] : data.filter(i => {
     const lowerSearch = searchTerm.toLowerCase();
     const nameChosung = getChosung(i.name).toLowerCase();
     const noteChosung = getChosung(i.note || "").toLowerCase();
     const isToilet = i.region === '화장실';
-
-    // 기본 검색: 이름, 비밀번호, 이름 초성
-    let match = i.name.toLowerCase().includes(lowerSearch) || 
-                i.password.includes(searchTerm) || 
-                nameChosung.includes(lowerSearch);
-
-    // 화장실 카테고리일 경우 특이사항(상가이름 등)과 특이사항 초성도 검색
-    if (isToilet) {
-      match = match || 
-              (i.note && i.note.toLowerCase().includes(lowerSearch)) || 
-              noteChosung.includes(lowerSearch);
-    }
-
+    let match = i.name.toLowerCase().includes(lowerSearch) || i.password.includes(searchTerm) || nameChosung.includes(lowerSearch);
+    if (isToilet) match = match || (i.note && i.note.toLowerCase().includes(lowerSearch)) || noteChosung.includes(lowerSearch);
     if (searchTerm !== '') return match;
     return (activeTab === '전체' || activeTab === '최근변경' || activeTab === 'Home') || i.region === activeTab;
   });
 
   if (activeTab === '최근변경') filtered = [...filtered].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+  // [신규] 통계 시각화 데이터 가공 로직
+  const chartData = useMemo(() => {
+    if (!adminMode || stats.visitLogs.length === 0) return { daily: [], hourly: Array(24).fill(0) };
+    
+    // 1. 최근 7일 일별 방문자 계산
+    const last7Days = Array.from({length: 7}, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      return d.toISOString().split('T')[0];
+    });
+    const daily = last7Days.map(date => ({
+      date: date.split('-').slice(1).join('/'),
+      count: stats.visitLogs.filter(v => v.created_at.startsWith(date)).length
+    }));
+
+    // 2. 전체 기간 시간대별 분포
+    const hourly = Array(24).fill(0);
+    stats.visitLogs.forEach(v => {
+      const hour = new Date(new Date(v.created_at).getTime() + (9 * 60 * 60 * 1000)).getUTCHours();
+      hourly[hour]++;
+    });
+
+    return { daily, hourly };
+  }, [adminMode, stats.visitLogs]);
 
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
@@ -200,7 +212,7 @@ export default function Page() {
         )}
       </div>
 
-      {/* 리스트 구역 [잠금: 시안성 디자인 고정] */}
+      {/* 리스트 구역 [잠금] */}
       {!adminMode && (
         <div className="p-5 space-y-5 relative z-10 min-h-[50px]">
           {filtered.map(i => {
@@ -240,16 +252,62 @@ export default function Page() {
         </div>
       )}
 
-      {/* 관리자 모드 [잠금: 롤백 기능 고정] */}
+      {/* 관리자 모드 [업그레이드: 시각화 통계 대시보드] */}
       {adminMode && (
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-black text-yellow-400 uppercase tracking-tighter flex items-center gap-2"><ShieldCheck /> Admin</h2>
             <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-4 py-2 rounded-xl font-bold border border-red-900/30">Exit</button>
           </div>
+
+          {/* [신규] 시각화 대시보드 */}
+          <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-6">
+             <div className="flex items-center gap-2 text-yellow-400 font-black text-sm uppercase tracking-wider">
+               <TrendingUp size={16} /> Traffic Analytics
+             </div>
+             
+             {/* 7일 방문 트렌드 막대 그래프 */}
+             <div className="space-y-3">
+               <p className="text-[10px] text-slate-500 font-bold uppercase">7-Day Visit Trend</p>
+               <div className="flex items-end justify-between h-24 gap-2 px-2">
+                 {chartData.daily.map((d, idx) => (
+                   <div key={idx} className="flex-1 flex flex-col items-center gap-2 group">
+                     <div className="w-full bg-slate-800 rounded-t-lg relative flex flex-col justify-end min-h-[4px]" style={{ height: `${(d.count / (Math.max(...chartData.daily.map(x=>x.count)) || 1)) * 100}%` }}>
+                       <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-black text-yellow-400 opacity-0 group-hover:opacity-100 transition-opacity">{d.count}</div>
+                       <div className="w-full h-full bg-yellow-500/80 rounded-t-lg group-hover:bg-yellow-400 transition-colors"></div>
+                     </div>
+                     <span className="text-[8px] text-slate-600 font-bold">{d.date}</span>
+                   </div>
+                 ))}
+               </div>
+             </div>
+
+             {/* 24시간 접속 분포 라인형 그래프 (SVG) */}
+             <div className="space-y-3">
+               <p className="text-[10px] text-slate-500 font-bold uppercase">Hourly Distribution (24H)</p>
+               <div className="relative h-16 w-full bg-slate-900/50 rounded-xl overflow-hidden border border-slate-800/50">
+                 <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 24 100">
+                   <polyline
+                     fill="none"
+                     stroke="#eab308"
+                     strokeWidth="3"
+                     strokeLinejoin="round"
+                     points={chartData.hourly.map((c, i) => `${i},${100 - (c / (Math.max(...chartData.hourly) || 1) * 80 + 10)}`).join(' ')}
+                   />
+                 </svg>
+                 <div className="absolute inset-0 flex justify-between px-2 items-end pb-1 pointer-events-none">
+                    <span className="text-[7px] text-slate-700 font-black">00:00</span>
+                    <span className="text-[7px] text-slate-700 font-black">12:00</span>
+                    <span className="text-[7px] text-slate-700 font-black">23:00</span>
+                 </div>
+               </div>
+             </div>
+          </div>
+
+          {/* [잠금] 관리자 달력 (일별 방문자 수 숫자 추가) */}
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><CalendarIcon size={16}/> Daily Activity</h3>
+              <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><CalendarIcon size={16}/> Activity Calendar</h3>
               <div className="flex items-center gap-4 bg-black/40 px-3 py-1.5 rounded-xl border border-slate-800">
                 <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}><ChevronLeft size={16}/></button>
                 <span className="text-xs font-black text-yellow-400 font-mono">{currentDate.getFullYear()}. {currentDate.getMonth() + 1}</span>
@@ -261,24 +319,31 @@ export default function Page() {
               {Array.from({length: getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth())}).map((_, i) => {
                 const day = i + 1;
                 const dStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const hasEdit = stats.logs.some(l => l.created_at.startsWith(dStr));
+                const dayEditLogs = stats.logs.filter(l => l.created_at.startsWith(dStr));
+                const dayVisits = stats.visitLogs.filter(v => v.created_at.startsWith(dStr)).length;
                 const isSelected = selectedDate === dStr;
                 return (
-                  <button key={day} onClick={() => setSelectedDate(dStr)} className={`aspect-square rounded-xl border flex flex-col items-center justify-center transition-all ${isSelected ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg scale-110 z-10' : hasEdit ? 'bg-red-500/20 border-red-500/40 text-white' : 'bg-slate-900/30 border-slate-800 text-slate-600 opacity-40'}`}>
+                  <button key={day} onClick={() => setSelectedDate(dStr)} className={`aspect-square rounded-xl border flex flex-col items-center justify-center transition-all relative ${isSelected ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg scale-110 z-10' : dayEditLogs.length > 0 ? 'bg-red-500/20 border-red-500/40 text-white' : 'bg-slate-900/30 border-slate-800 text-slate-600 opacity-40'}`}>
                     <span className="text-[11px] font-black">{day}</span>
+                    {/* [신규] 일별 방문자수 표기 */}
+                    {dayVisits > 0 && (
+                      <span className={`absolute bottom-1 right-1 text-[7px] font-black ${isSelected ? 'text-black/60' : 'text-yellow-500/80'}`}>{dayVisits}</span>
+                    )}
+                    {dayEditLogs.length > 0 && !isSelected && <div className="absolute top-1 right-1 w-1 h-1 bg-red-500 rounded-full animate-pulse"></div>}
                   </button>
                 );
               })}
             </div>
           </div>
+
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-4">
             <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><History size={16}/> Logs for {selectedDate}</h3>
             <div className="space-y-4 max-h-96 overflow-y-auto no-scrollbar">
               {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).length === 0 ? (
-                <div className="text-center py-10 opacity-30 italic font-bold">No activity.</div>
+                <div className="text-center py-10 opacity-30 italic font-bold">No activity logged.</div>
               ) : (
                 stats.logs.filter(l => l.created_at.startsWith(selectedDate)).map((log, idx) => (
-                  <div key={`l-${idx}`} className={`bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 ${log.event_type === 'ADD' ? 'border-l-green-500' : log.event_type === 'DELETE' ? 'border-l-red-500' : 'border-l-blue-500'} space-y-3 shadow-inner`}>
+                  <div key={`l-${idx}`} className={`bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 ${log.event_type === 'ADD' ? 'border-l-green-500' : log.event_type === 'DELETE' ? 'border-l-red-500' : 'border-l-blue-500'} space-y-3`}>
                     <div className="flex justify-between items-start">
                       <div className="min-w-0 flex-1 text-xs">
                         <p className="text-slate-500 font-bold mb-1 flex items-center gap-1"><Clock size={10} /> {new Date(log.created_at).toLocaleTimeString()} • {log.ip}</p>
@@ -286,7 +351,7 @@ export default function Page() {
                       </div>
                       {log.event_type !== 'ADD' && (
                         <button onClick={async () => {
-                          if(confirm(`정보를 완벽 복구할까요?`)) {
+                          if(confirm(`정보를 완벽 복구할까요?\n(수정 전 데이터: ${log.old_password})`)) {
                             await supabase.from('buildings').upsert({ id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region, updated_at: new Date() });
                             fetchData(); fetchStats(); alert("복구 완료!");
                           }
@@ -325,11 +390,6 @@ export default function Page() {
               <div className="grid grid-cols-4 gap-2">
                 {['운서', '하늘', '운남', '화장실'].map(r => (
                   <button key={r} onClick={() => setFormData({...formData, region: formData.region === r ? '' : r})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg shadow-yellow-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{r}</button>
-                ))}
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {['아파트', '오피스텔', '빌라'].map(t => (
-                  <button key={t} onClick={() => setFormData({...formData, b_type: formData.b_type === t ? '' : t})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.b_type === t ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{t}</button>
                 ))}
               </div>
               <input type="text" placeholder="건물 명칭 (필수)" className="w-full p-4 bg-[#070b14] rounded-2xl border border-slate-800 text-white outline-none focus:border-yellow-500 font-bold placeholder:text-slate-800 shadow-inner" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
@@ -371,6 +431,8 @@ export default function Page() {
           50% { transform: scale(1.03); box-shadow: 0 20px 45px rgba(234,179,8,0.6); }
         }
         .animate-pulse-slow { animation: pulse-slow 3s infinite ease-in-out; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
     </div>
   );
