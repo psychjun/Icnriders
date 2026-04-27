@@ -51,8 +51,22 @@ export default function Page() {
   const [ip, setIp] = useState('');
   const [showVisitorList, setShowVisitorList] = useState(false);
 
+  // [고정] 한국 시간 기준 날짜 문자열
   const getKSTDateString = (date = new Date()) => {
-    return new Date(date.getTime() + (9 * 60 * 60 * 1000)).toISOString().split('T')[0];
+    return new Intl.DateTimeFormat('ko-KR', { 
+      timeZone: 'Asia/Seoul', 
+      year: 'numeric', month: '2-digit', day: '2-digit' 
+    }).format(date).replace(/\. /g, '-').replace('.', '');
+  };
+
+  // [신규] 시간을 한국 표준시로 포맷팅하는 함수
+  const formatToKSTTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleTimeString('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const [selectedDate, setSelectedDate] = useState(getKSTDateString());
@@ -64,7 +78,12 @@ export default function Page() {
     if (b) setData(b);
     const todayStr = getKSTDateString();
     const { count: totalCount } = await supabase.from('site_visits').select('*', { count: 'exact', head: true });
-    const { count: todayCount } = await supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('created_at', `${todayStr}T00:00:00Z`);
+    
+    // 00:00:00 기준 시간 생성을 위해 KST 보정
+    const kstMidnight = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+    kstMidnight.setHours(0,0,0,0);
+    
+    const { count: todayCount } = await supabase.from('site_visits').select('*', { count: 'exact', head: true }).gte('created_at', kstMidnight.toISOString());
     setStats(prev => ({ ...prev, visits: totalCount || 0, todayVisits: todayCount || 0 }));
   };
 
@@ -135,15 +154,14 @@ export default function Page() {
 
   if (activeTab === '최근변경') filtered = [...filtered].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
-  // [수정] 접속 시간 병기 로직 추가
+  // [수정] 접속 시간 병기 로직 (한국 시간 고정)
   const selectedDayDetail = useMemo(() => {
     if (!adminMode) return null;
-    const dayLogs = stats.logs.filter(l => l.created_at.startsWith(selectedDate));
-    const dayVisits = stats.visitLogs.filter(v => v.created_at.startsWith(selectedDate));
+    const dayLogs = stats.logs.filter(l => getKSTDateString(new Date(l.created_at)) === selectedDate);
+    const dayVisits = stats.visitLogs.filter(v => getKSTDateString(new Date(v.created_at)) === selectedDate);
     
-    // IP별 방문 횟수 및 시간대 집계
     const ipStats = dayVisits.reduce((acc: any, curr) => {
-      const time = new Date(new Date(curr.created_at).getTime() + (9 * 60 * 60 * 1000)).toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' });
+      const time = formatToKSTTime(curr.created_at);
       if (!acc[curr.ip]) acc[curr.ip] = { count: 0, times: [] };
       acc[curr.ip].count++;
       acc[curr.ip].times.push(time);
@@ -210,7 +228,7 @@ export default function Page() {
         )}
       </div>
 
-      {/* 리스트 구역 [잠금: 주소 및 특이사항 표시] */}
+      {/* 리스트 구역 [잠금] */}
       {!adminMode && (
         <div className="p-5 space-y-5 relative z-10 min-h-[50px]">
           {filtered.map(i => {
@@ -250,7 +268,7 @@ export default function Page() {
         </div>
       )}
 
-      {/* 관리자 모드 [업그레이드: 접속 상세 시간 병기] */}
+      {/* 관리자 모드 [시간 보정 완료] */}
       {adminMode && (
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-center mb-4">
@@ -272,8 +290,8 @@ export default function Page() {
               {Array.from({length: getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth())}).map((_, i) => {
                 const day = i + 1;
                 const dStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const dayEditLogs = stats.logs.filter(l => l.created_at.startsWith(dStr));
-                const hasVisit = stats.visitLogs.some(v => v.created_at.startsWith(dStr));
+                const dayEditLogs = stats.logs.filter(l => getKSTDateString(new Date(l.created_at)) === dStr);
+                const hasVisit = stats.visitLogs.some(v => getKSTDateString(new Date(v.created_at)) === dStr);
                 const isSelected = selectedDate === dStr;
                 return (
                   <button key={day} onClick={() => setSelectedDate(dStr)} className={`aspect-square rounded-2xl border flex flex-col items-center justify-center transition-all relative ${isSelected ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg scale-110 z-10' : 'bg-slate-900/40 border-slate-800/60 text-slate-400'}`}>
@@ -306,7 +324,6 @@ export default function Page() {
                       <span className="text-[11px] font-mono font-bold text-slate-300">{vIp}</span>
                       <span className="text-[10px] font-black text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-lg">{info.count} hits</span>
                     </div>
-                    {/* [신규] 시간대 출력 섹션 */}
                     <div className="flex flex-wrap gap-1.5">
                       {info.times.map((t: string, tIdx: number) => (
                         <span key={tIdx} className="text-[8px] font-black text-slate-500 bg-black/40 px-1.5 py-0.5 rounded border border-slate-800">{t}</span>
@@ -319,9 +336,9 @@ export default function Page() {
 
             <div className="space-y-3 max-h-80 overflow-y-auto no-scrollbar pt-2 border-t border-slate-800/50">
               <div className="text-[10px] text-slate-500 font-black uppercase mb-3 flex items-center gap-1.5"><History size={12}/> Data Activity Logs</div>
-              {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).map((log, idx) => (
+              {stats.logs.filter(l => getKSTDateString(new Date(l.created_at)) === selectedDate).map((log, idx) => (
                 <div key={`l-${idx}`} className={`bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 ${log.event_type === 'ADD' ? 'border-l-green-500' : log.event_type === 'DELETE' ? 'border-l-red-500' : 'border-l-blue-500'} flex justify-between items-center`}>
-                  <div className="min-w-0 flex-1"><p className="text-[10px] text-slate-500 font-bold mb-1">{new Date(log.created_at).toLocaleTimeString()} • {log.ip}</p><h4 className="font-black text-white truncate">{log.old_name}</h4></div>
+                  <div className="min-w-0 flex-1"><p className="text-[10px] text-slate-500 font-bold mb-1">{formatToKSTTime(log.created_at)} • {log.ip}</p><h4 className="font-black text-white truncate">{log.old_name}</h4></div>
                   {log.event_type !== 'ADD' && <button onClick={async () => { if(confirm(`복구할까요?`)) { await supabase.from('buildings').upsert({ id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region, updated_at: new Date() }); fetchData(); fetchStats(); alert("복구 완료!"); } }} className="bg-red-600 text-white p-2.5 rounded-2xl active:scale-95"><RotateCcw size={16}/></button>}
                 </div>
               ))}
@@ -344,7 +361,7 @@ export default function Page() {
         </div>
       </footer>
 
-      {/* 모달 [잠금: 건물 종류 선택 버튼 포함] */}
+      {/* 모달 [잠금] */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-sm">
           <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl break-keep relative animate-in zoom-in-95 duration-200">
