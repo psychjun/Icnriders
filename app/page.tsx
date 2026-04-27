@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
-// [잠금] 초성 검색 엔진
+// [잠금] 한글 초성 검색 엔진
 const getChosung = (str: string) => {
   if (!str) return "";
   const cho = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
@@ -135,12 +135,27 @@ export default function Page() {
 
   if (activeTab === '최근변경') filtered = [...filtered].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
+  // [수정] 접속 시간 병기 로직 추가
   const selectedDayDetail = useMemo(() => {
     if (!adminMode) return null;
     const dayLogs = stats.logs.filter(l => l.created_at.startsWith(selectedDate));
     const dayVisits = stats.visitLogs.filter(v => v.created_at.startsWith(selectedDate));
-    const ipCounts = dayVisits.reduce((acc: any, curr) => { acc[curr.ip] = (acc[curr.ip] || 0) + 1; return acc; }, {});
-    return { visitCount: dayVisits.length, addCount: dayLogs.filter(l => l.event_type === 'ADD').length, editCount: dayLogs.filter(l => l.event_type === 'EDIT' || l.event_type === 'DELETE').length, visitorDetails: Object.entries(ipCounts).sort((a:any, b:any) => b[1] - a[1]) };
+    
+    // IP별 방문 횟수 및 시간대 집계
+    const ipStats = dayVisits.reduce((acc: any, curr) => {
+      const time = new Date(new Date(curr.created_at).getTime() + (9 * 60 * 60 * 1000)).toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' });
+      if (!acc[curr.ip]) acc[curr.ip] = { count: 0, times: [] };
+      acc[curr.ip].count++;
+      acc[curr.ip].times.push(time);
+      return acc;
+    }, {});
+
+    return {
+      visitCount: dayVisits.length,
+      addCount: dayLogs.filter(l => l.event_type === 'ADD').length,
+      editCount: dayLogs.filter(l => l.event_type === 'EDIT' || l.event_type === 'DELETE').length,
+      visitorDetails: Object.entries(ipStats).sort((a:any, b:any) => b[1].count - a[1].count)
+    };
   }, [adminMode, selectedDate, stats.logs, stats.visitLogs]);
 
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
@@ -195,7 +210,7 @@ export default function Page() {
         )}
       </div>
 
-      {/* 리스트 구역 [복구: 주소 및 지도 버튼 다시 등장] */}
+      {/* 리스트 구역 [잠금: 주소 및 특이사항 표시] */}
       {!adminMode && (
         <div className="p-5 space-y-5 relative z-10 min-h-[50px]">
           {filtered.map(i => {
@@ -212,7 +227,6 @@ export default function Page() {
                       {isToilet ? <KoreanRestroomPictogram size={22} className="text-cyan-400 shrink-0 mt-0.5" /> : null}
                       <h2 className={`text-xl font-black ${isToilet ? 'text-cyan-100' : 'text-white'} tracking-tighter break-keep leading-tight`}>{i.name}</h2>
                     </div>
-                    {/* [복구] 주소 및 지도 링크 코드 */}
                     {i.address && (
                       <button onClick={() => window.open(`https://map.naver.com/v5/search/${encodeURIComponent(i.address)}`, '_blank')} className="flex items-center gap-1 mt-1.5 text-blue-400 text-[10px] font-bold opacity-70 hover:opacity-100 transition-opacity">
                         <MapPin size={10} /> {i.address} <ExternalLink size={10} />
@@ -236,13 +250,14 @@ export default function Page() {
         </div>
       )}
 
-      {/* 관리자 모드 [잠금: 인디케이터 기반 캘린더 & 정밀 분석] */}
+      {/* 관리자 모드 [업그레이드: 접속 상세 시간 병기] */}
       {adminMode && (
         <div className="p-5 space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-black text-yellow-400 uppercase tracking-tighter flex items-center gap-2"><ShieldCheck /> Admin</h2>
             <button onClick={() => setAdminMode(false)} className="text-xs bg-red-600/10 text-red-500 px-4 py-2 rounded-xl font-bold border border-red-900/30">Exit</button>
           </div>
+
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="font-bold text-slate-300 flex items-center gap-2 text-sm"><CalendarIcon size={16}/> Activity Map</h3>
@@ -270,6 +285,7 @@ export default function Page() {
               })}
             </div>
           </div>
+
           <div className="bg-[#1e293b]/60 backdrop-blur-md p-6 rounded-[2.5rem] border border-slate-800 shadow-2xl space-y-6">
             <h3 className="text-lg font-black text-white tracking-tighter flex items-center gap-2"><Clock size={18} className="text-yellow-500" /> {selectedDate} Report</h3>
             <div className="grid grid-cols-3 gap-3">
@@ -277,24 +293,38 @@ export default function Page() {
               <div className="bg-slate-900/60 p-4 rounded-3xl border border-slate-800/60 text-center"><p className="text-[9px] text-slate-500 font-bold mb-1">New</p><p className="text-xl font-black text-green-500">{selectedDayDetail?.addCount}</p></div>
               <div className="bg-slate-900/60 p-4 rounded-3xl border border-slate-800/60 text-center"><p className="text-[9px] text-slate-500 font-bold mb-1">Mod</p><p className="text-xl font-black text-red-500">{selectedDayDetail?.editCount}</p></div>
             </div>
+
             <button onClick={() => setShowVisitorList(!showVisitorList)} className="w-full flex items-center justify-between p-4 bg-slate-900/40 rounded-2xl border border-slate-800/60 transition-all">
-              <div className="flex items-center gap-2"><Users size={16} className="text-blue-400" /><span className="text-xs font-black text-slate-300">Visitor IP List</span></div>
+              <div className="flex items-center gap-2"><Users size={16} className="text-blue-400" /><span className="text-xs font-black text-slate-300">Detailed Visitor Timeline</span></div>
               {showVisitorList ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
             {showVisitorList && (
-              <div className="bg-black/20 rounded-3xl border border-slate-800/40 p-2 space-y-1 max-h-48 overflow-y-auto no-scrollbar">
-                {selectedDayDetail?.visitorDetails.map(([ip, count]: any, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-3 bg-slate-900/40 rounded-2xl"><span className="text-[11px] font-mono font-bold text-slate-300">{ip}</span><span className="text-[10px] font-black text-yellow-500">{count} hits</span></div>
+              <div className="bg-black/20 rounded-3xl border border-slate-800/40 p-2 space-y-1 max-h-64 overflow-y-auto no-scrollbar">
+                {selectedDayDetail?.visitorDetails.map(([vIp, info]: any, idx) => (
+                  <div key={idx} className="bg-slate-900/40 p-3 rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono font-bold text-slate-300">{vIp}</span>
+                      <span className="text-[10px] font-black text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-lg">{info.count} hits</span>
+                    </div>
+                    {/* [신규] 시간대 출력 섹션 */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {info.times.map((t: string, tIdx: number) => (
+                        <span key={tIdx} className="text-[8px] font-black text-slate-500 bg-black/40 px-1.5 py-0.5 rounded border border-slate-800">{t}</span>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
-            <div className="space-y-3 max-h-80 overflow-y-auto no-scrollbar pt-2">
-                {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).map((log, idx) => (
-                  <div key={`l-${idx}`} className={`bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 ${log.event_type === 'ADD' ? 'border-l-green-500' : log.event_type === 'DELETE' ? 'border-l-red-500' : 'border-l-blue-500'} flex justify-between items-center`}>
-                    <div className="min-w-0 flex-1"><p className="text-[10px] text-slate-500 font-bold mb-1">{new Date(log.created_at).toLocaleTimeString()} • {log.ip}</p><h4 className="font-black text-white truncate">{log.old_name}</h4></div>
-                    {log.event_type !== 'ADD' && <button onClick={async () => { if(confirm(`복구할까요?`)) { await supabase.from('buildings').upsert({ id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region, updated_at: new Date() }); fetchData(); fetchStats(); alert("복구 완료!"); } }} className="bg-red-600 text-white p-2.5 rounded-2xl active:scale-95"><RotateCcw size={16}/></button>}
-                  </div>
-                ))}
+
+            <div className="space-y-3 max-h-80 overflow-y-auto no-scrollbar pt-2 border-t border-slate-800/50">
+              <div className="text-[10px] text-slate-500 font-black uppercase mb-3 flex items-center gap-1.5"><History size={12}/> Data Activity Logs</div>
+              {stats.logs.filter(l => l.created_at.startsWith(selectedDate)).map((log, idx) => (
+                <div key={`l-${idx}`} className={`bg-black/40 p-4 rounded-3xl border border-slate-800 border-l-4 ${log.event_type === 'ADD' ? 'border-l-green-500' : log.event_type === 'DELETE' ? 'border-l-red-500' : 'border-l-blue-500'} flex justify-between items-center`}>
+                  <div className="min-w-0 flex-1"><p className="text-[10px] text-slate-500 font-bold mb-1">{new Date(log.created_at).toLocaleTimeString()} • {log.ip}</p><h4 className="font-black text-white truncate">{log.old_name}</h4></div>
+                  {log.event_type !== 'ADD' && <button onClick={async () => { if(confirm(`복구할까요?`)) { await supabase.from('buildings').upsert({ id: log.building_id, name: log.old_name.replace('[삭제됨] ', ''), password: log.old_password, note: log.old_note, address: log.old_address, b_type: log.old_b_type, region: log.old_region, updated_at: new Date() }); fetchData(); fetchStats(); alert("복구 완료!"); } }} className="bg-red-600 text-white p-2.5 rounded-2xl active:scale-95"><RotateCcw size={16}/></button>}
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -314,7 +344,7 @@ export default function Page() {
         </div>
       </footer>
 
-      {/* 모달 [복구: 건물 종류 선택 버튼 다시 활성화] */}
+      {/* 모달 [잠금: 건물 종류 선택 버튼 포함] */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex items-center justify-center p-6 text-sm">
           <div className="bg-[#1e293b] w-full max-w-md rounded-[3rem] p-8 border border-slate-800 shadow-3xl break-keep relative animate-in zoom-in-95 duration-200">
@@ -326,7 +356,6 @@ export default function Page() {
                   <button key={r} onClick={() => setFormData({...formData, region: formData.region === r ? '' : r})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.region === r ? 'bg-yellow-500 border-yellow-500 text-black shadow-lg shadow-yellow-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{r}</button>
                 ))}
               </div>
-              {/* [복구] 건물 종류 선택 버튼 */}
               <div className="grid grid-cols-3 gap-2">
                 {['아파트', '오피스텔', '빌라'].map(t => (
                   <button key={t} onClick={() => setFormData({...formData, b_type: formData.b_type === t ? '' : t})} className={`py-2 rounded-xl font-bold border transition-all text-[11px] ${formData.b_type === t ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/10' : 'bg-slate-900/50 border-slate-800 text-slate-600'}`}>{t}</button>
